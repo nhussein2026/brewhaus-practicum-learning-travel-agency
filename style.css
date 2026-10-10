@@ -1,0 +1,391 @@
+/* 1. Basic page setup */
+:root {
+  --color-dark: #183b3a;
+  --color-green: #287a68;
+  --color-light: #f4f7f3;
+  --color-text: #263735;
+  --color-muted: #687774;
+  --color-white: #ffffff;
+  --color-accent: #f2b66d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  color: var(--color-text);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.6;
+}
+
+img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 2. Header and navigation: Flexbox */
+.site-header {
+  background: var(--color-white);
+}
+
+.navbar {
+  width: min(1100px, 90%);
+  min-height: 76px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.logo {
+  color: var(--color-dark);
+  font-size: 1.6rem;
+  font-weight: bold;
+  letter-spacing: -1px;
+}
+
+.logo span {
+  color: var(--color-green);
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  font-size: 0.95rem;
+}
+
+.nav-links a:hover,
+.site-footer a:hover {
+  color: var(--color-green);
+}
+
+.nav-links .nav-button {
+  padding: 10px 16px;
+  border-radius: 5px;
+  background: var(--color-green);
+  color: var(--color-white);
+}
+
+/* 3. Hero section */
+.hero {
+  min-height: 510px;
+  padding: 90px 5%;
+  display: flex;
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(13, 38, 37, 0.78), rgba(13, 38, 37, 0.15)),
+    url("https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1800&q=85") center/cover no-repeat;
+  color: var(--color-white);
+}
+
+.hero-content {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: var(--color-green);
+  font-size: 0.78rem;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.hero .eyebrow {
+  color: var(--color-accent);
+}
+
+.hero h1 {
+  max-width: 650px;
+  margin: 0 0 18px;
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 1.08;
+}
+
+.hero-content > p:not(.eyebrow) {
+  max-width: 520px;
+  margin-bottom: 28px;
+  font-size: 1.1rem;
+}
+
+.button {
+  display: inline-block;
+  padding: 13px 22px;
+  border-radius: 5px;
+  background: var(--color-green);
+  color: var(--color-white);
+  font-weight: bold;
+}
+
+.button:hover {
+  background: var(--color-dark);
+}
+
+/* 4. Shared section styles */
+.section {
+  width: min(1100px, 90%);
+  margin: 0 auto;
+  padding: 82px 0;
+}
+
+.section-heading {
+  max-width: 620px;
+  margin: 0 auto 36px;
+  text-align: center;
+}
+
+.section-heading h2,
+.about-content h2,
+.plan-section h2 {
+  margin: 0 0 12px;
+  color: var(--color-dark);
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  line-height: 1.2;
+}
+
+.section-heading > p:last-child {
+  margin-bottom: 0;
+  color: var(--color-muted);
+}
+
+/* 5. Tour cards: CSS Grid */
+.tour-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.tour-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e5ebe6;
+  border-radius: 8px;
+  background: var(--color-white);
+}
+
+.tour-card img {
+  height: 210px;
+  object-fit: cover;
+}
+
+.tour-info {
+  padding: 18px;
+}
+
+.tour-location {
+  margin: 0 0 5px;
+  color: var(--color-green);
+  font-size: 0.75rem;
+  font-weight: bold;
+  letter-spacing: 1.5px;
+}
+
+.tour-info h3 {
+  margin: 0 0 18px;
+  color: var(--color-dark);
+  font-size: 1.2rem;
+}
+
+.tour-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.tour-details span {
+  color: var(--color-muted);
+}
+
+.tour-details strong {
+  color: var(--color-green);
+}
+
+/* 6. About section: Flexbox */
+.about {
+  display: flex;
+  align-items: center;
+  gap: 55px;
+}
+
+.about-image,
+.about-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.about-image img {
+  min-height: 320px;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.about-content > p:not(.eyebrow) {
+  color: var(--color-muted);
+}
+
+.text-link {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--color-green);
+  font-weight: bold;
+}
+
+/* 7. Testimonials */
+.reviews {
+  padding-top: 35px;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.review-card {
+  padding: 24px;
+  border-radius: 8px;
+  background: var(--color-light);
+}
+
+.stars {
+  margin: 0 0 12px;
+  color: #d98d2f;
+  letter-spacing: 3px;
+}
+
+.review-card blockquote {
+  margin: 0 0 18px;
+}
+
+.reviewer {
+  margin: 0;
+  color: var(--color-green);
+  font-weight: bold;
+}
+
+/* 8. Call to action */
+.plan-section {
+  padding: 70px 5%;
+  background: var(--color-dark);
+  color: var(--color-white);
+  text-align: center;
+}
+
+.plan-section h2 {
+  color: var(--color-white);
+}
+
+.plan-section > p:not(.eyebrow) {
+  max-width: 560px;
+  margin: 0 auto 25px;
+  color: #d8e4df;
+}
+
+.button-light {
+  background: var(--color-accent);
+  color: var(--color-dark);
+}
+
+.button-light:hover {
+  background: var(--color-white);
+  color: var(--color-dark);
+}
+
+/* 9. Footer: Flexbox */
+.site-footer {
+  width: min(1100px, 90%);
+  min-height: 90px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 22px 0;
+  font-size: 0.9rem;
+}
+
+.site-footer p {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+/* 10. Responsive layout */
+@media (max-width: 800px) {
+  .tour-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .about {
+    gap: 30px;
+  }
+
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .navbar {
+    padding: 18px 0;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .nav-links {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 12px 18px;
+  }
+
+  .hero {
+    min-height: 460px;
+    padding: 70px 5%;
+  }
+
+  .section {
+    padding: 58px 0;
+  }
+
+  .tour-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tour-card img {
+    height: 220px;
+  }
+
+  .about {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .about-image img {
+    min-height: 230px;
+    max-height: 300px;
+  }
+
+  .site-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
