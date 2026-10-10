@@ -328,22 +328,38 @@ a {
   color: var(--color-muted);
 }
 
-/* 10. Responsive layout */
+/*
+  10. Responsive layout
+
+  The layout uses a desktop-first approach:
+  - Above 800px, grids show three columns and the about section stays side by side.
+  - At 800px and below, content begins to stack to prevent cards and text from
+    becoming too narrow.
+  - At 600px and below, navigation and all major content use a single-column
+    layout so the page remains readable on phones.
+*/
 @media (max-width: 800px) {
+  /* Show two tour cards per row on tablets and smaller laptop screens. */
   .tour-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* Reduce the gap before the about section stacks at the phone breakpoint. */
   .about {
     gap: 30px;
   }
 
+  /* Testimonials are easier to read when each card gets the full row width. */
   .review-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 600px) {
+  /*
+    Stack the logo and navigation links vertically. This prevents the header
+    from overflowing when the available screen width is limited.
+  */
   .navbar {
     padding: 18px 0;
     align-items: flex-start;
@@ -351,39 +367,47 @@ a {
     gap: 14px;
   }
 
+  /* Allow links to wrap onto multiple lines instead of becoming cramped. */
   .nav-links {
     width: 100%;
     flex-wrap: wrap;
     gap: 12px 18px;
   }
 
+  /* Use a shorter hero and less padding so the main content appears sooner. */
   .hero {
     min-height: 460px;
     padding: 70px 5%;
   }
 
+  /* Reduce vertical whitespace to make scrolling on small screens shorter. */
   .section {
     padding: 58px 0;
   }
 
+  /* Display one tour card per row for comfortable reading and interaction. */
   .tour-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Give the single-column tour image a little more visual height. */
   .tour-card img {
     height: 220px;
   }
 
+  /* Stack the image above the text instead of squeezing both side by side. */
   .about {
     flex-direction: column;
     align-items: stretch;
   }
 
+  /* Keep the about image useful without making it dominate the phone screen. */
   .about-image img {
     min-height: 230px;
     max-height: 300px;
   }
 
+  /* Stack footer content so each item remains aligned and readable. */
   .site-footer {
     align-items: flex-start;
     flex-direction: column;
