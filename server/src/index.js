@@ -3,7 +3,7 @@ import express from 'express'
 import cors from 'cors'
 
 const app = express()
-const PORT = Number(process.env.PORT ?? 3000)
+const PORT = Number(process.env.PORT ?? 3001)
 
 // Only our own frontend may call the API with cookies.
 app.use(
