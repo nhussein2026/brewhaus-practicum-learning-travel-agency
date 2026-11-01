@@ -1,6 +1,8 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import { toNodeHandler } from 'better-auth/node'
+import { auth } from './auth.js'
 import { toursRouter } from './routes/tours.js'
 
 const app = express()
@@ -13,6 +15,10 @@ app.use(
     credentials: true,
   }),
 )
+
+// better-auth handles every /api/auth/* request (sign-up, sign-in, get-session, sign-out).
+// It needs the raw request body, so it is mounted before express.json().
+app.all('/api/auth/*splat', toNodeHandler(auth))
 
 app.use(express.json())
 app.use('/api/tours', toursRouter)
