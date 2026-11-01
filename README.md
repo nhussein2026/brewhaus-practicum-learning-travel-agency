@@ -5,6 +5,7 @@ Wanderly is a website for a travel agency, built during the BrewHaus Practicum. 
 - Week 1 was a static HTML/CSS page.
 - Week 2 rebuilt it with React + Tailwind.
 - Week 3 added a real backend, a Postgres database, login, and deployment.
+- Week 4 added real payments with Stripe Checkout (test mode).
 
 The **Development story** below covers each assignment.
 
@@ -23,6 +24,7 @@ The **Development story** below covers each assignment.
 | ORM | [Drizzle ORM](https://orm.drizzle.team) + `drizzle-kit` | 0.45 / 0.31 | The schema is written in JavaScript. `drizzle-kit push` creates the tables. |
 | DB driver | `postgres` (postgres.js) | 4 | The connection Drizzle uses. |
 | Auth | [better-auth](https://www.better-auth.com) | 1.7 | Email + password sign-up and sign-in. Sessions are stored in the database and kept in a cookie. |
+| Payments | [Stripe](https://stripe.com) Checkout (`stripe` npm package) | 23 | Hosted payment page in test mode. A signed webhook confirms each payment. |
 | Hosting | Vercel (client), Railway (server) | | Both parts are live on public URLs. |
 | Linting | oxlint | 1 | `npm run lint` in `client/`. |
 | Runtime | Node.js | 20+ (built with 22) | |
@@ -35,13 +37,14 @@ Plain JavaScript everywhere (no TypeScript).
 
 ```
 .
+├── start.sh                     runs the API, frontend and Stripe forwarder together
 ├── client/                      React app (deployed to Vercel)
 │   ├── index.html               Vite entry (a #root div + script tag)
 │   ├── vite.config.js           React + Tailwind plugins, dev proxy /api → http://localhost:3001
 │   ├── vercel.json              production: /api/* → Railway, everything else → index.html
 │   └── src/
 │       ├── main.jsx             mounts <App />
-│       ├── App.jsx              router: / (home), /login, /signup
+│       ├── App.jsx              router: / (home), /login, /signup, /checkout/success
 │       ├── index.css            Tailwind import + @theme colours
 │       ├── lib/auth-client.js   better-auth client: signIn, signUp, signOut, useSession
 │       ├── data/reviews.js      testimonials (still static)
@@ -49,8 +52,9 @@ Plain JavaScript everywhere (no TypeScript).
 │           ├── Header.jsx           nav + "Sign in" or "Hi, name · Sign out"
 │           ├── AuthForm.jsx         shared sign-in / sign-up form
 │           ├── Tours.jsx            fetches /api/tours, region filter
-│           ├── TourCard.jsx         one tour + its traveler count
+│           ├── TourCard.jsx         one tour + its traveler count + "Book now" (starts checkout)
 │           ├── TravelerStepper.jsx  controlled − / + component
+│           ├── CheckoutSuccess.jsx  after payment: polls /api/orders/:id until it says paid
 │           └── Hero, About, Reviews, PlanTrip, Footer, SectionHeading, Logo
 │
 └── server/                      Express API (deployed to Railway)
@@ -60,7 +64,14 @@ Plain JavaScript everywhere (no TypeScript).
     └── src/
         ├── index.js             Express app: CORS, auth handler, routes, 404 + error handler
         ├── auth.js              better-auth config (database, email/password, session length)
-        ├── routes/tours.js      GET /api/tours, GET /api/tours/:slug
+        ├── middleware/
+        │   └── requireAuth.js   blocks the request with 401 unless signed in; sets req.user
+        ├── lib/stripe.js        Stripe client (reads STRIPE_SECRET_KEY)
+        ├── routes/
+        │   ├── tours.js         GET /api/tours, GET /api/tours/:slug
+        │   ├── checkout.js      POST /api/checkout: creates the order and the Stripe session
+        │   ├── webhook.js       POST /api/stripe/webhook: the only place an order becomes 'paid'
+        │   └── orders.js        GET /api/orders/:id: one of your own orders
         └── db/
             ├── schema.js        all tables
             ├── index.js         database connection (reads DATABASE_URL)
@@ -79,9 +90,13 @@ Plain JavaScript everywhere (no TypeScript).
 | `session` | one signed-in browser | `token` (stored in the cookie), `expires_at`, `user_id` → `user.id` |
 | `verification` | a short-lived code (email verification / password reset). Not used yet | `identifier`, `value`, `expires_at` |
 | `tours` | one tour package on the site | `id`, `slug` (unique, e.g. `sunny-santorini`), `name`, `country`, `region`, `days`, `price` (whole USD per traveler), `image_url`, `image_alt` |
+| `orders` | one checkout by one user | `id`, `user_id` → `user.id`, `status` (`pending` → `paid`, or `expired`), `total` (whole USD), `stripe_session_id` (unique), `created_at`, `paid_at` |
+| `order_items` | what was bought in an order, and at what price | `order_id` → `orders.id`, `tour_id` → `tours.id`, `travelers`, `unit_price` (copied from the tour at purchase time) |
 
 - **One user can have many sessions**, for example a laptop and a phone. Deleting a user deletes their sessions and accounts too (`on delete cascade`).
-- better-auth owns the first four tables. Our own code only reads `tours`.
+- **One user has many orders, and one order has many items.** For now each checkout holds one tour, but the shape allows more.
+- `unit_price` is **copied** into `order_items`. If a tour's price changes later, old orders still show what the customer actually paid.
+- better-auth owns the four auth tables. Our own code works with `tours`, `orders` and `order_items`.
 
 ---
 
@@ -105,7 +120,62 @@ So the browser only ever talks to one domain, and cookies just work. The fronten
 
 ---
 
+## How payments work (Stripe Checkout, test mode)
+
+```
+Browser                         Our API                                  Stripe
+───────                         ───────                                  ──────
+"Book now" ── POST /api/checkout {tourId, travelers} ──▶
+                                requireAuth: signed in? (else 401)
+                                look up the tour's REAL price in Postgres
+                                insert order (pending) + order_items
+                                create Checkout Session ───────────────▶
+                         ◀───── { url } ◀──────────────────────────────── session.url
+redirect to Stripe ───────────────────────────────────────────────────▶ hosted payment page
+                                                                         card 4242 4242 4242 4242
+                                POST /api/stripe/webhook ◀────────────── checkout.session.completed
+                                verify Stripe signature
+                                order → 'paid'
+redirect to /checkout/success?order=ID ◀────────────────────────────────
+CheckoutSuccess polls GET /api/orders/ID until status = 'paid'
+```
+
+1. **Login check.** `requireAuth` (`server/src/middleware/requireAuth.js`) asks better-auth for the session that matches the request's cookie. If there is none, the request stops with `401`. Otherwise it sets `req.user`, so every order belongs to a real user.
+2. **Never trust the browser's price.** The client sends only `tourId` and `travelers`. `checkout.js`:
+   - checks that travelers is between 1 and 10,
+   - reads `tour.price` from the database,
+   - works out the total,
+   - saves the order as `pending` with its `order_items`, in one transaction,
+   - creates the Stripe session with `metadata.orderId` and returns `session.url`.
+   
+   If Stripe refuses, the order is deleted again.
+3. **The webhook is the only thing that marks an order paid.** Stripe calls `POST /api/stripe/webhook` itself.
+   - The route gets the **raw** body, because it's mounted before `express.json()`.
+   - `stripe.webhooks.constructEvent` checks Stripe's signature using `STRIPE_WEBHOOK_SECRET`. A forged request gets `400`.
+   - On `checkout.session.completed` with `payment_status: 'paid'`, the order goes from `pending` to `paid` and `paid_at` is set.
+   - On `checkout.session.expired`, it goes to `expired`.
+   - Only `pending` orders are updated, so if Stripe sends the same event twice, nothing changes the second time.
+4. **The success page doesn't decide anything.** The success URL alone proves nothing, because anyone can type it in. `CheckoutSuccess` asks `GET /api/orders/:id`, which returns only the signed-in user's own orders. The webhook can arrive a moment after the redirect, so while the order is still `pending` the page asks again every 1.5 s, up to 6 times.
+
+**Test card:** `4242 4242 4242 4242`, any future expiry date, any CVC, any postcode.
+
+---
+
 ## Running locally
+
+### Quick start: `start.sh`
+```bash
+./start.sh            # installs packages if needed, then starts everything
+./start.sh --setup    # also creates/updates the tables and seeds the tours first
+```
+It needs `server/.env` (see below), and it:
+- starts the API on **:3001** and waits until it responds,
+- starts `stripe listen --forward-to localhost:3001/api/stripe/webhook`, if the Stripe CLI is installed,
+- starts the frontend on **:5173**.
+
+**Ctrl+C** stops all of them.
+
+### Step by step
 
 Requires Node 20+ and a Postgres database. A free Neon project works, or a local Docker container:
 ```bash
@@ -157,6 +227,22 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 | `BETTER_AUTH_URL` | `http://localhost:3001` | the Vercel URL |
 | `CLIENT_URL` | `http://localhost:5173` | the Vercel URL |
 | `PORT` | `3001` | set by Railway |
+| `STRIPE_SECRET_KEY` | `sk_test_...` (Stripe Dashboard → Developers → API keys, **Test mode**) | same test key |
+| `STRIPE_WEBHOOK_SECRET` | the `whsec_...` printed by `stripe listen` | the signing secret of the Dashboard webhook endpoint |
+
+### Testing the webhook locally (Stripe CLI)
+```bash
+stripe login                                                  # once
+stripe listen --forward-to localhost:3001/api/stripe/webhook  # start.sh runs this for you
+# copy the printed whsec_... into STRIPE_WEBHOOK_SECRET, then restart the API
+```
+Then click **Book now** and pay with `4242 4242 4242 4242`. The terminal shows `Order N paid`, and the success page switches to "paid".
+
+To see the orders in the database:
+```bash
+cd server && npm run db:studio      # or, with the Docker database:
+docker exec wanderly-pg psql -U wanderly -c "select id, user_id, status, total, paid_at from orders order by id"
+```
 
 `.env` and `.env.*` are listed in `.gitignore`. Only `.env.example` is committed. To check:
 ```bash
@@ -173,7 +259,12 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
 | GET | `/api/tours` | all tours, as JSON |
 | GET | `/api/tours/:slug` | one tour, or `404 { error }` |
 | * | `/api/auth/*` | better-auth: `sign-up/email`, `sign-in/email`, `get-session`, `sign-out` |
+| POST | `/api/checkout` | 🔒 body `{ tourId, travelers }` → `{ url }` of a Stripe Checkout page |
+| GET | `/api/orders/:id` | 🔒 one of *your* orders with its items (someone else's → `404`) |
+| POST | `/api/stripe/webhook` | called by Stripe only. The signature is verified. Marks orders `paid` / `expired` |
 | * | any other `/api/*` | `404 { error: 'No such endpoint' }` |
+
+🔒 = needs a signed-in user (`requireAuth`), otherwise `401 { error: 'Please sign in first.' }`.
 
 ---
 
@@ -187,7 +278,12 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
 3. **Vercel (frontend):**
    - Import the repo with the **root directory** set to `client`.
    - In `client/vercel.json`, replace `YOUR-RAILWAY-APP.up.railway.app` with your Railway domain.
-   - `/api/*` is forwarded to Railway. All other paths get `index.html`, so `/login` survives a refresh.
+   - `/api/*` is forwarded to Railway. All other paths get `index.html`, so `/login` and `/checkout/success` survive a refresh.
+4. **Stripe (production webhook):**
+   - In the Stripe Dashboard (Test mode), go to **Developers → Webhooks → Add endpoint**.
+   - URL: `https://<your-vercel-app>.vercel.app/api/stripe/webhook`. Events: `checkout.session.completed` and `checkout.session.expired`.
+   - Copy its signing secret into Railway as `STRIPE_WEBHOOK_SECRET`, and add `STRIPE_SECRET_KEY` there too.
+   - Run `npm run db:push` against Neon once more, so the `orders` and `order_items` tables exist.
 
 ---
 
@@ -269,6 +365,56 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
 
 ---
 
-### Assignment 4: Stripe payments (Week 4, next)
+### Assignment 4: Real payments with Stripe Checkout (Week 4)
 
-Stripe Checkout in test mode, an orders table, and a webhook that marks orders as paid.
+**Goal:** a real (fake-money) purchase from start to finish:
+- click **Book now**,
+- pay on Stripe's hosted page,
+- a webhook confirms the payment,
+- the order is saved as paid,
+- a success page shows it.
+
+1. **Two new tables:**
+   - `orders`: one per purchase, with `status`, `total`, `stripe_session_id` and `paid_at`.
+   - `order_items`: which tour, how many travelers, and the `unit_price` at the moment of purchase.
+   
+   They were pushed with `drizzle-kit push`.
+2. **Stripe in test mode.** The `stripe` package, plus `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in `.env` (documented in `.env.example`).
+3. **Login middleware** `requireAuth`. It returns `401` unless there is a valid session and sets `req.user`. It protects checkout and order lookup.
+4. **`POST /api/checkout`.** It:
+   - validates the input,
+   - reads the **real price from the database** (a `price` sent by the browser is ignored),
+   - creates the `pending` order + item in one transaction,
+   - creates the Stripe Checkout Session (amount in cents, `metadata.orderId`, success and cancel URLs),
+   - returns its URL.
+   
+   If Stripe fails, the order is removed.
+5. **`POST /api/stripe/webhook`.** It:
+   - takes the raw body,
+   - verifies Stripe's signature,
+   - marks the order `paid` on `checkout.session.completed`, or `expired` on `checkout.session.expired`.
+   
+   It only updates `pending` orders, so a repeated event changes nothing. **No other code sets `paid`.**
+6. **"Book now" button** on every `TourCard`:
+   - If you're signed out, it sends you to `/login`.
+   - Otherwise it posts `{ tourId, travelers }` (the travelers come from the Week 2 stepper) and redirects to Stripe.
+   - Errors are shown on the card.
+7. **`GET /api/orders/:id` + `/checkout/success` page.**
+   - The endpoint returns only your own orders. Anyone else gets `404`.
+   - The page asks the endpoint again every 1.5 s (up to 6 times) while the order is `pending`, then shows the paid order with its items and total.
+   - It stops asking if you leave the page.
+8. **`start.sh`** runs the API, the frontend and `stripe listen` with one command (`--setup` also pushes the schema and seeds), and Ctrl+C stops them all.
+
+**Tested locally:**
+- Checkout without login gets `401`.
+- 50 travelers gets `400`.
+- An unknown tour gets `404`.
+- A Stripe failure leaves no stray order behind.
+- A forged webhook gets `400`.
+- A Stripe-signed webhook (made with Stripe's own `generateTestHeaderString` helper) flips the order to `paid`.
+- Someone else's order gets `404`.
+- In headless Chrome:
+  - "Book now" while signed out goes to `/login`.
+  - The success page shows "Confirming your payment…" and then switches to **paid** by itself when the webhook arrives.
+  - No horizontal scroll at 320px.
+- The full Stripe payment (real test key + Stripe CLI + card 4242) is done with the real Stripe account.
