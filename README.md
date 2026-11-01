@@ -44,15 +44,17 @@ Plain JavaScript everywhere (no TypeScript).
 │   ├── vercel.json              production: /api/* → Railway, everything else → index.html
 │   └── src/
 │       ├── main.jsx             mounts <App />
-│       ├── App.jsx              router: / (home), /login, /signup, /checkout/success
+│       ├── App.jsx              router: / (home), /login, /signup, /booking, /checkout/success
 │       ├── index.css            Tailwind import + @theme colours
 │       ├── lib/auth-client.js   better-auth client: signIn, signUp, signOut, useSession
+│       ├── lib/trip-plan.jsx    the trip plan (cart): which tours + how many travelers, shared via context
 │       ├── data/reviews.js      testimonials (still static)
 │       └── components/
-│           ├── Header.jsx           nav + "Sign in" or "Hi, name · Sign out"
+│           ├── Header.jsx           page links · account (Sign in / name + Sign out) · "My trip (N)" button
+│           ├── BookingPage.jsx      /booking: review every chosen tour + total, then one payment
 │           ├── AuthForm.jsx         shared sign-in / sign-up form
 │           ├── Tours.jsx            fetches /api/tours, region filter
-│           ├── TourCard.jsx         one tour + its traveler count + "Book now" (starts checkout)
+│           ├── TourCard.jsx         one tour + its traveler count + "Add to trip plan"
 │           ├── TravelerStepper.jsx  controlled − / + component
 │           ├── CheckoutSuccess.jsx  after payment: polls /api/orders/:id until it says paid
 │           └── Hero, About, Reviews, PlanTrip, Footer, SectionHeading, Logo
@@ -94,7 +96,7 @@ Plain JavaScript everywhere (no TypeScript).
 | `order_items` | what was bought in an order, and at what price | `order_id` → `orders.id`, `tour_id` → `tours.id`, `travelers`, `unit_price` (copied from the tour at purchase time) |
 
 - **One user can have many sessions**, for example a laptop and a phone. Deleting a user deletes their sessions and accounts too (`on delete cascade`).
-- **One user has many orders, and one order has many items.** For now each checkout holds one tour, but the shape allows more.
+- **One user has many orders, and one order has many items.** Booking Santorini for 2 and Kyoto for 3 in one checkout makes **one** `orders` row and **two** `order_items` rows.
 - `unit_price` is **copied** into `order_items`. If a tour's price changes later, old orders still show what the customer actually paid.
 - better-auth owns the four auth tables. Our own code works with `tours`, `orders` and `order_items`.
 
@@ -125,10 +127,12 @@ So the browser only ever talks to one domain, and cookies just work. The fronten
 ```
 Browser                         Our API                                  Stripe
 ───────                         ───────                                  ──────
-"Book now" ── POST /api/checkout {tourId, travelers} ──▶
+"Add to trip plan" on one or more tours (kept in the browser, nothing paid)
+/booking: review tours, travelers, totals
+"Proceed to payment" ── POST /api/checkout {items: [{tourId, travelers}, ...]} ──▶
                                 requireAuth: signed in? (else 401)
-                                look up the tour's REAL price in Postgres
-                                insert order (pending) + order_items
+                                look up every tour's REAL price in Postgres
+                                insert ONE order (pending) + one order_items row per tour
                                 create Checkout Session ───────────────▶
                          ◀───── { url } ◀──────────────────────────────── session.url
 redirect to Stripe ───────────────────────────────────────────────────▶ hosted payment page
@@ -140,12 +144,19 @@ redirect to /checkout/success?order=ID ◀────────────�
 CheckoutSuccess polls GET /api/orders/ID until status = 'paid'
 ```
 
+0. **The trip plan (cart).** `client/src/lib/trip-plan.jsx` holds the chosen tours as `[{ tourId, travelers }]`.
+   - It's shared with React **context**, so `TourCard` (Add to trip plan), `Header` (My trip count) and `BookingPage` all see the same list.
+   - It's copied into `localStorage`, so a refresh or the detour through sign-in keeps it.
+   - `/booking` shows each tour with a stepper, a line total and Remove, plus the grand total. Nothing is charged until **Proceed to payment**.
+   - Signed out, that button reads **Sign in to book** and goes to `/login?next=/booking`, which returns you to the plan afterwards.
+   - The plan is cleared once the success page sees the order is `paid`.
 1. **Login check.** `requireAuth` (`server/src/middleware/requireAuth.js`) asks better-auth for the session that matches the request's cookie. If there is none, the request stops with `401`. Otherwise it sets `req.user`, so every order belongs to a real user.
-2. **Never trust the browser's price.** The client sends only `tourId` and `travelers`. `checkout.js`:
-   - checks that travelers is between 1 and 10,
-   - reads `tour.price` from the database,
+2. **Never trust the browser's price.** The client sends only `{ tourId, travelers }` for each tour. `checkout.js`:
+   - checks there are 1–10 tours, no tour twice, and 1–10 travelers each,
+   - reads every `tour.price` from the database in one query (a missing tour gets `404`),
    - works out the total,
-   - saves the order as `pending` with its `order_items`, in one transaction,
+   - saves **one** `pending` order with one `order_items` row per tour, in one transaction,
+   - gives Stripe one line item per tour,
    - creates the Stripe session with `metadata.orderId` and returns `session.url`.
    
    If Stripe refuses, the order is deleted again.
@@ -236,7 +247,7 @@ stripe login                                                  # once
 stripe listen --forward-to localhost:3001/api/stripe/webhook  # start.sh runs this for you
 # copy the printed whsec_... into STRIPE_WEBHOOK_SECRET, then restart the API
 ```
-Then click **Book now** and pay with `4242 4242 4242 4242`. The terminal shows `Order N paid`, and the success page switches to "paid".
+Then add one or more tours to your trip plan, open **My trip**, click **Proceed to payment** and pay with `4242 4242 4242 4242`. The terminal shows `Order N paid`, and the success page switches to "paid".
 
 To see the orders in the database:
 ```bash
@@ -259,7 +270,7 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
 | GET | `/api/tours` | all tours, as JSON |
 | GET | `/api/tours/:slug` | one tour, or `404 { error }` |
 | * | `/api/auth/*` | better-auth: `sign-up/email`, `sign-in/email`, `get-session`, `sign-out` |
-| POST | `/api/checkout` | 🔒 body `{ tourId, travelers }` → `{ url }` of a Stripe Checkout page |
+| POST | `/api/checkout` | 🔒 body `{ items: [{ tourId, travelers }, ...] }` → `{ url }` of one Stripe Checkout page for all of them |
 | GET | `/api/orders/:id` | 🔒 one of *your* orders with its items (someone else's → `404`) |
 | POST | `/api/stripe/webhook` | called by Stripe only. The signature is verified. Marks orders `paid` / `expired` |
 | * | any other `/api/*` | `404 { error: 'No such endpoint' }` |
@@ -278,7 +289,7 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
 3. **Vercel (frontend):**
    - Import the repo with the **root directory** set to `client`.
    - In `client/vercel.json`, replace `YOUR-RAILWAY-APP.up.railway.app` with your Railway domain.
-   - `/api/*` is forwarded to Railway. All other paths get `index.html`, so `/login` and `/checkout/success` survive a refresh.
+   - `/api/*` is forwarded to Railway. All other paths get `index.html`, so `/login`, `/booking` and `/checkout/success` survive a refresh.
 4. **Stripe (production webhook):**
    - In the Stripe Dashboard (Test mode), go to **Developers → Webhooks → Add endpoint**.
    - URL: `https://<your-vercel-app>.vercel.app/api/stripe/webhook`. Events: `checkout.session.completed` and `checkout.session.expired`.
@@ -404,6 +415,19 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
    - The page asks the endpoint again every 1.5 s (up to 6 times) while the order is `pending`, then shows the paid order with its items and total.
    - It stops asking if you leave the page.
 8. **`start.sh`** runs the API, the frontend and `stripe listen` with one command (`--setup` also pushes the schema and seeds), and Ctrl+C stops them all.
+9. **Review before paying, and several tours at once:**
+   - "Book now" became **Add to trip plan**. Customers can choose several tours, each with its own number of travelers.
+   - A new **`/booking`** page lists every chosen tour (photo, days, price per traveler, stepper, line total, Remove), a price summary and the grand total.
+   - Only its **Proceed to payment** button starts checkout, and it pays for **all** tours together: one order, several `order_items`, one Stripe page.
+   - Cancelling on Stripe returns to `/booking` with the plan intact.
+   - Signing in from there returns to `/booking` (`/login?next=/booking`). Only paths on our own site are accepted for `next`.
+10. **Header reorganised** into three groups:
+    - page links (Tours, About, Reviews),
+    - the account (Sign in, or your initial + first name and a smaller Sign out),
+    - one main button, **My trip (N)**, that shows how many tours are in the plan.
+    
+    On phones, the logo and My trip sit on the top row, with the links and the account below.
+11. **Scroll fixes:** a new page starts at the top, and links like `/#tours` land on their section, even when coming from another page.
 
 **Tested locally:**
 - Checkout without login gets `401`.
@@ -413,8 +437,12 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
 - A forged webhook gets `400`.
 - A Stripe-signed webhook (made with Stripe's own `generateTestHeaderString` helper) flips the order to `paid`.
 - Someone else's order gets `404`.
-- In headless Chrome:
-  - "Book now" while signed out goes to `/login`.
-  - The success page shows "Confirming your payment…" and then switches to **paid** by itself when the webhook arrives.
+- An empty plan, a duplicate tour, 0 travelers or a missing tour in a multi-tour checkout each get a clear `400`/`404`.
+- In Chrome:
+  - Adding Santorini (1) and Kyoto (3) shows **My trip 2**.
+  - `/booking` shows $650 + $2340 = **$2990**.
+  - Changing travelers and removing a tour update the totals and the header count.
+  - Signed out, "Sign in to book" returns to `/booking` after sign-in with the plan intact.
+  - A paid two-tour order shows both tours and **$3640** on the success page, and the plan empties.
   - No horizontal scroll at 320px.
 - The full Stripe payment (real test key + Stripe CLI + card 4242) is done with the real Stripe account.
