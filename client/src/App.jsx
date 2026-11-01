@@ -8,6 +8,7 @@ import { PlanTrip } from './components/PlanTrip'
 import { Footer } from './components/Footer'
 import { AuthForm } from './components/AuthForm'
 import { CheckoutSuccess } from './components/CheckoutSuccess'
+import { ScrollToTop } from './components/ScrollToTop'
 
 function Home() {
   return (
@@ -24,6 +25,7 @@ function Home() {
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Header />
       <Routes>
         <Route path="/" element={<Home />} />
