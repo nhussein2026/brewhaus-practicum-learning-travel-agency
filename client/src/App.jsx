@@ -10,6 +10,7 @@ import { AuthForm } from './components/AuthForm'
 import { CheckoutSuccess } from './components/CheckoutSuccess'
 import { ScrollToTop } from './components/ScrollToTop'
 import { BookingPage } from './components/BookingPage'
+import { TripPlanProvider } from './lib/trip-plan'
 
 function Home() {
   return (
@@ -26,16 +27,18 @@ function Home() {
 function App() {
   return (
     <BrowserRouter>
-      <ScrollToTop />
-      <Header />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<AuthForm mode="signin" />} />
-        <Route path="/signup" element={<AuthForm mode="signup" />} />
-        <Route path="/book/:slug" element={<BookingPage />} />
-        <Route path="/checkout/success" element={<CheckoutSuccess />} />
-      </Routes>
-      <Footer />
+      <TripPlanProvider>
+        <ScrollToTop />
+        <Header />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<AuthForm mode="signin" />} />
+          <Route path="/signup" element={<AuthForm mode="signup" />} />
+          <Route path="/booking" element={<BookingPage />} />
+          <Route path="/checkout/success" element={<CheckoutSuccess />} />
+        </Routes>
+        <Footer />
+      </TripPlanProvider>
     </BrowserRouter>
   )
 }

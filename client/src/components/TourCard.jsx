@@ -1,11 +1,16 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { Link } from 'react-router'
+import { useTripPlan } from '../lib/trip-plan'
 import { TravelerStepper } from './TravelerStepper'
 
 export function TourCard({ tour }) {
+  const { plans, savePlan } = useTripPlan()
+  const inPlan = plans.find((plan) => plan.tourId === tour.id)
+
   // Each card keeps its own traveler count and hands it to the stepper.
-  const [travelers, setTravelers] = useState(1)
-  const navigate = useNavigate()
+  // If this tour is already in the trip plan, start from that count.
+  const [travelers, setTravelers] = useState(inPlan?.travelers ?? 1)
+  const changed = inPlan && inPlan.travelers !== travelers
 
   return (
     <article className="min-w-0 overflow-hidden rounded-lg border border-line bg-white">
@@ -24,14 +29,24 @@ export function TourCard({ tour }) {
         <p className="mt-2 text-right text-sm text-muted">
           Total: <strong className="text-forest">${tour.price * travelers}</strong>
         </p>
-        {/* Opens the review page with this card's choices. Nothing is paid yet. */}
-        <button
-          type="button"
-          onClick={() => navigate(`/book/${tour.slug}?travelers=${travelers}`)}
-          className="mt-4 w-full cursor-pointer rounded-[5px] bg-brand px-4 py-2.5 font-bold text-white hover:bg-forest"
-        >
-          Book now
-        </button>
+
+        {/* Adds this tour to the trip plan. Nothing is paid until the booking page. */}
+        {inPlan && !changed ? (
+          <Link
+            to="/booking"
+            className="mt-4 block w-full rounded-[5px] border border-brand px-4 py-2.5 text-center font-bold text-brand hover:bg-mist"
+          >
+            ✓ In your trip plan · View
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => savePlan(tour.id, travelers)}
+            className="mt-4 w-full cursor-pointer rounded-[5px] bg-brand px-4 py-2.5 font-bold text-white hover:bg-forest"
+          >
+            {changed ? `Update to ${travelers} ${travelers === 1 ? 'traveler' : 'travelers'}` : 'Add to trip plan'}
+          </button>
+        )}
       </div>
     </article>
   )

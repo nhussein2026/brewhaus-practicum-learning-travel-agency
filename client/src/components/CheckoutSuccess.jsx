@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
+import { useTripPlan } from '../lib/trip-plan'
 
 const MAX_TRIES = 6
 const RETRY_MS = 1500
@@ -13,6 +14,13 @@ export function CheckoutSuccess() {
   const [order, setOrder] = useState(null)
   const [error, setError] = useState(null)
   const [gaveUp, setGaveUp] = useState(false)
+  const { clearPlans } = useTripPlan()
+
+  // Once the payment is confirmed, the booked tours leave the trip plan.
+  const paid = order?.status === 'paid'
+  useEffect(() => {
+    if (paid) clearPlans()
+  }, [paid, clearPlans])
 
   useEffect(() => {
     let cancelled = false
@@ -56,7 +64,7 @@ export function CheckoutSuccess() {
       ) : order.status === 'paid' ? (
         <>
           <Message eyebrow="PAYMENT RECEIVED" title="You're going on a trip!">
-            Order #{order.id} is <strong className="text-brand">paid</strong>. A confirmation is on its way to your email.
+            Order #{order.id} is <strong className="text-brand">paid</strong>. Thank you for booking with Wanderly.
           </Message>
           <OrderSummary order={order} />
         </>
