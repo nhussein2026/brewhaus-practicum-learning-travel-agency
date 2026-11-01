@@ -1,5 +1,17 @@
+import { Header } from './components/Header'
+import { Hero } from './components/Hero'
+import { Footer } from './components/Footer'
+
 function App() {
-  return <h1 className="p-6 text-3xl font-bold text-brand">wanderly.</h1>
+  return (
+    <>
+      <Header />
+      <main>
+        <Hero />
+      </main>
+      <Footer />
+    </>
+  )
 }
 
 export default App
