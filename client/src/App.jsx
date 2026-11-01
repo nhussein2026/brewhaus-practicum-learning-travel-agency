@@ -7,6 +7,7 @@ import { Reviews } from './components/Reviews'
 import { PlanTrip } from './components/PlanTrip'
 import { Footer } from './components/Footer'
 import { AuthForm } from './components/AuthForm'
+import { CheckoutSuccess } from './components/CheckoutSuccess'
 
 function Home() {
   return (
@@ -28,6 +29,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<AuthForm mode="signin" />} />
         <Route path="/signup" element={<AuthForm mode="signup" />} />
+        <Route path="/checkout/success" element={<CheckoutSuccess />} />
       </Routes>
       <Footer />
     </BrowserRouter>
