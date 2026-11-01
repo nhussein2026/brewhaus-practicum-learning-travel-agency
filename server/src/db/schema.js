@@ -70,3 +70,27 @@ export const tours = pgTable('tours', {
   imageAlt: text('image_alt').notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// Orders: one row per checkout attempt. It starts as 'pending' and only the
+// Stripe webhook may change it to 'paid' (or 'expired' if checkout times out).
+// ---------------------------------------------------------------------------
+export const orders = pgTable('orders', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('pending'), // 'pending' | 'paid' | 'expired'
+  total: integer('total').notNull(), // whole US dollars, worked out on the server
+  stripeSessionId: text('stripe_session_id').unique(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  paidAt: timestamp('paid_at'),
+})
+
+// What was bought in an order, and at what price at that moment.
+// unitPrice is copied from the tour, so later price changes don't rewrite old orders.
+export const orderItems = pgTable('order_items', {
+  id: serial('id').primaryKey(),
+  orderId: integer('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  tourId: integer('tour_id').notNull().references(() => tours.id),
+  travelers: integer('travelers').notNull(),
+  unitPrice: integer('unit_price').notNull(), // whole US dollars per traveler
+})
