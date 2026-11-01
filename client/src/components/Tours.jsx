@@ -1,13 +1,32 @@
-import { useState } from 'react'
-import { tours } from '../data/tours'
+import { useEffect, useState } from 'react'
 import { SectionHeading } from './SectionHeading'
 import { TourCard } from './TourCard'
 
 const regions = ['All', 'Europe', 'Asia', 'Middle East']
 
 export function Tours() {
-  // The selected region is the only state. The visible list is derived from it on every render.
+  const [tours, setTours] = useState([])
+  const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
+  // The selected region is the only filter state. The visible list is derived from it on every render.
   const [region, setRegion] = useState('All')
+
+  // Load the tours from our API once, when the section first appears.
+  useEffect(() => {
+    async function loadTours() {
+      try {
+        const response = await fetch('/api/tours')
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        setTours(await response.json())
+        setStatus('ready')
+      } catch (err) {
+        console.error('Failed to load tours', err)
+        setStatus('error')
+      }
+    }
+
+    loadTours()
+  }, [])
+
   const filtered = region === 'All' ? tours : tours.filter((tour) => tour.region === region)
 
   return (
@@ -34,12 +53,21 @@ export function Tours() {
         ))}
       </div>
 
+      {status === 'loading' && <p className="text-center text-muted">Loading tours...</p>}
+      {status === 'error' && (
+        <p role="alert" className="text-center text-muted">
+          We couldn't load the tours right now. Please try again in a moment.
+        </p>
+      )}
+
       {/* 1 column on phones, 2 from sm, 3 from md. */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
-        {filtered.map((tour) => (
-          <TourCard key={tour.id} tour={tour} />
-        ))}
-      </div>
+      {status === 'ready' && (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+          {filtered.map((tour) => (
+            <TourCard key={tour.id} tour={tour} />
+          ))}
+        </div>
+      )}
     </section>
   )
 }
