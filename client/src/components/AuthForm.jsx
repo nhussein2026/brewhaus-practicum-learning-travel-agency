@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { signIn, signUp } from '../lib/auth-client'
 
 // One form for both pages: mode is 'signin' or 'signup'.
 export function AuthForm({ mode }) {
   const isSignup = mode === 'signup'
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  // Where to go after signing in, e.g. /login?next=/book/discover-kyoto?travelers=3
+  // Only paths on our own site are allowed ('/...' but not '//other-site.com').
+  const requested = params.get('next') ?? '/'
+  const next = requested.startsWith('/') && !requested.startsWith('//') ? requested : '/'
+  const nextQuery = next === '/' ? '' : `?next=${encodeURIComponent(next)}`
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -30,7 +36,7 @@ export function AuthForm({ mode }) {
         return
       }
 
-      navigate('/')
+      navigate(next)
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {
@@ -80,9 +86,9 @@ export function AuthForm({ mode }) {
 
       <p className="mt-6 text-center text-sm text-muted">
         {isSignup ? (
-          <>Already have an account? <Link to="/login" className="font-bold text-brand">Sign in</Link></>
+          <>Already have an account? <Link to={`/login${nextQuery}`} className="font-bold text-brand">Sign in</Link></>
         ) : (
-          <>New to Wanderly? <Link to="/signup" className="font-bold text-brand">Create an account</Link></>
+          <>New to Wanderly? <Link to={`/signup${nextQuery}`} className="font-bold text-brand">Create an account</Link></>
         )}
       </p>
     </main>

@@ -58,7 +58,8 @@ checkoutRouter.post('/', requireAuth, async (req, res) => {
       // The webhook reads this to know which order was paid.
       metadata: { orderId: String(order.id) },
       success_url: `${CLIENT_URL}/checkout/success?order=${order.id}`,
-      cancel_url: `${CLIENT_URL}/#tours`,
+      // "Back" on Stripe returns to the review page with the same choices.
+      cancel_url: `${CLIENT_URL}/book/${tour.slug}?travelers=${travelers}`,
     })
 
     await db.update(orders).set({ stripeSessionId: session.id }).where(eq(orders.id, order.id))
