@@ -22,7 +22,7 @@ export function About() {
           At Wanderly, we believe the best journeys bring people closer to the world. We help you
           find memorable destinations and plan trips without the stress.
         </p>
-        <a href="#plan" className="mt-2.5 inline-block font-bold text-brand">
+        <a href="/#plan" className="mt-2.5 inline-block font-bold text-brand">
           Let's plan something special →
         </a>
       </div>

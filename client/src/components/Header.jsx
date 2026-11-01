@@ -1,12 +1,18 @@
+import { Link } from 'react-router'
+import { useSession, signOut } from '../lib/auth-client'
 import { Logo } from './Logo'
 
+// "/#tours" (not "#tours") so the links also work from the login page.
 const links = [
-  { href: '#tours', label: 'Tours' },
-  { href: '#about', label: 'About' },
-  { href: '#reviews', label: 'Reviews' },
+  { href: '/#tours', label: 'Tours' },
+  { href: '/#about', label: 'About' },
+  { href: '/#reviews', label: 'Reviews' },
 ]
 
 export function Header() {
+  // useSession asks the API who is signed in (using the session cookie) and re-renders when that changes.
+  const { data: session, isPending } = useSession()
+
   return (
     <header id="home" className="bg-white">
       {/* Mobile: logo stacked above the links. sm and up: one row. */}
@@ -21,10 +27,21 @@ export function Header() {
               {link.label}
             </a>
           ))}
-          <a
-            href="#plan"
-            className="rounded-[5px] bg-brand px-4 py-2.5 text-white hover:bg-forest"
-          >
+
+          {isPending ? null : session?.user ? (
+            <>
+              <span className="text-muted">Hi, {session.user.name.split(' ')[0]}</span>
+              <button type="button" onClick={() => signOut()} className="cursor-pointer hover:text-brand">
+                Sign out
+              </button>
+            </>
+          ) : (
+            <Link to="/login" className="hover:text-brand">
+              Sign in
+            </Link>
+          )}
+
+          <a href="/#plan" className="rounded-[5px] bg-brand px-4 py-2.5 text-white hover:bg-forest">
             Plan your trip
           </a>
         </div>

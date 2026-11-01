@@ -21,7 +21,7 @@ export function Hero() {
           Discover beautiful places, meet new people, and make memories that last a lifetime.
         </p>
         <a
-          href="#tours"
+          href="/#tours"
           className="inline-block rounded-[5px] bg-brand px-[22px] py-[13px] font-bold hover:bg-forest"
         >
           Explore our tours
