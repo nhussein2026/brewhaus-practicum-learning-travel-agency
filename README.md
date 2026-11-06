@@ -6,8 +6,11 @@ Wanderly is a website for a travel agency, built during the BrewHaus Practicum. 
 - Week 2 rebuilt it with React + Tailwind.
 - Week 3 added a real backend, a Postgres database, login, and deployment.
 - Week 4 added real payments with Stripe Checkout (test mode).
+- After the practicum, it became a **bilingual (English / Turkish) demo of a Black Sea highlands tour agency**, built to pitch to a real agency in the region.
 
-The **Development story** below covers each assignment.
+The **Development story** below covers each step.
+
+> **This is a demo.** A banner on every page says the tours, prices and reviews are samples, payments run in Stripe test mode, and search engines are asked not to index it. See [Demo mode](#demo-mode).
 
 ---
 
@@ -16,7 +19,8 @@ The **Development story** below covers each assignment.
 | Part | Tool | Version | What it does here |
 |---|---|---|---|
 | UI library | [React](https://react.dev) | 19 | Splits the page into components. Handles state with `useState` / `useEffect`. |
-| Routing | [React Router](https://reactrouter.com) | 8 | The `/`, `/login` and `/signup` pages. |
+| Routing | [React Router](https://reactrouter.com) | 8 | `/`, `/tours/:slug`, `/booking`, `/login`, `/signup`, `/checkout/success`, `/credits`, and a 404 page. |
+| Languages | Own small i18n module + `Intl` | | English and Turkish. Text in `client/src/i18n/`, prices formatted with `Intl.NumberFormat`. |
 | Build tool / dev server | [Vite](https://vite.dev) | 8 | Dev server with instant reload, a `/api` proxy, and the production bundle. |
 | Styling | [Tailwind CSS](https://tailwindcss.com) | 4 | Utility classes. Brand colours live in an `@theme` block. |
 | API server | [Express](https://expressjs.com) | 5 | JSON API under `/api`. |
@@ -42,22 +46,34 @@ Plain JavaScript everywhere (no TypeScript).
 │   ├── index.html               Vite entry (a #root div + script tag)
 │   ├── vite.config.js           React + Tailwind plugins, dev proxy /api → http://localhost:3001
 │   ├── vercel.json              production: /api/* → Railway, everything else → index.html
+│   ├── public/images/           the tour and page photos (Wikimedia Commons, credited on /credits)
 │   └── src/
 │       ├── main.jsx             mounts <App />
-│       ├── App.jsx              router: / (home), /login, /signup, /booking, /checkout/success
+│       ├── App.jsx              providers (language, trip plan), error boundaries, routes
 │       ├── index.css            Tailwind import + @theme colours
+│       ├── i18n/en.js, tr.js    every sentence of the site, in English and Turkish (same keys)
+│       ├── lib/i18n.jsx         language context: useI18n() → { lang, setLang, t, formatPrice }
+│       ├── lib/config.js        VITE_* settings: demo mode, WhatsApp number, contact email
+│       ├── lib/use-tours.js     loads /api/tours in the current language
+│       ├── lib/pricing.js       lineTotal(): per person vs per vehicle (display only)
+│       ├── lib/errors.js        API/auth error code → message in the current language
 │       ├── lib/auth-client.js   better-auth client: signIn, signUp, signOut, useSession
 │       ├── lib/trip-plan.jsx    the trip plan (cart): which tours + how many travelers, shared via context
-│       ├── data/reviews.js      testimonials (still static)
+│       ├── data/reviews.js      SAMPLE reviews (shown only in demo mode)
+│       ├── data/site-photos.js  hero/about photos and their credits
 │       └── components/
-│           ├── Header.jsx           page links · account (Sign in / name + Sign out) · "My trip (N)" button
+│           ├── Header.jsx           page links · EN/TR switch · account · "My trip (N)" button
+│           ├── DemoBanner.jsx       "this is a demo" strip (demo mode only)
+│           ├── Tours.jsx            tour grid with a category filter kept in the URL (?category=hiking)
+│           ├── TourCard.jsx         one tour card, links to its page
+│           ├── TourPage.jsx         /tours/:slug: description, highlights, included, booking box, WhatsApp
+│           ├── TripPlanControls.jsx stepper + total + "Add to trip plan" (card and tour page)
 │           ├── BookingPage.jsx      /booking: review every chosen tour + total, then one payment
-│           ├── AuthForm.jsx         shared sign-in / sign-up form
-│           ├── Tours.jsx            fetches /api/tours, region filter
-│           ├── TourCard.jsx         one tour + its traveler count + "Add to trip plan"
-│           ├── TravelerStepper.jsx  controlled − / + component
 │           ├── CheckoutSuccess.jsx  after payment: polls /api/orders/:id until it says paid
-│           └── Hero, About, Reviews, PlanTrip, Footer, SectionHeading, Logo
+│           ├── Credits.jsx          /credits: photographer + licence for every photo
+│           ├── ErrorBoundary.jsx    shows a message instead of a blank page if something crashes
+│           └── AuthForm, TravelerStepper, LanguageSwitcher, WhatsAppButton, NotFound,
+│               Hero, About, Reviews, PlanTrip, Footer, SectionHeading, Logo, ScrollToTop
 │
 └── server/                      Express API (deployed to Railway)
     ├── .env.example             template for the secrets (.env itself is git-ignored)
@@ -69,16 +85,20 @@ Plain JavaScript everywhere (no TypeScript).
         ├── middleware/
         │   └── requireAuth.js   blocks the request with 401 unless signed in; sets req.user
         ├── lib/stripe.js        Stripe client (reads STRIPE_SECRET_KEY)
+        ├── lib/locale.js        ?lang= → 'en' | 'tr', and loading translations with English fallback
+        ├── lib/pricing.js       CURRENCY ('try') and lineTotal(): the one pricing rule
+        ├── lib/parse-id.js      turns outside input into a positive integer id, or null
         ├── routes/
-        │   ├── tours.js         GET /api/tours, GET /api/tours/:slug
+        │   ├── tours.js         GET /api/tours, GET /api/tours/:slug (?lang=en|tr)
         │   ├── checkout.js      POST /api/checkout: creates the order and the Stripe session
         │   ├── webhook.js       POST /api/stripe/webhook: the only place an order becomes 'paid'
         │   └── orders.js        GET /api/orders/:id: one of your own orders
         └── db/
             ├── schema.js        all tables
             ├── index.js         database connection (reads DATABASE_URL)
-            ├── tours.data.js    the six tours (moved here from the Week 2 client)
-            └── seed.js          inserts the tours into the database
+            ├── tours.data.js    the 10 Black Sea tours, each in English and Turkish, with photo credits
+            ├── seed.js          upserts the tours + translations, archives tours no longer listed
+            └── upgrade.js       one-time: removes the old Week 2–4 tour columns before db:push
 ```
 
 ---
@@ -91,14 +111,18 @@ Plain JavaScript everywhere (no TypeScript).
 | `account` | how that user logs in. For email + password, it holds the **hashed** password | `user_id` → `user.id`, `provider_id` = `credential`, `password` |
 | `session` | one signed-in browser | `token` (stored in the cookie), `expires_at`, `user_id` → `user.id` |
 | `verification` | a short-lived code (email verification / password reset). Not used yet | `identifier`, `value`, `expires_at` |
-| `tours` | one tour package on the site | `id`, `slug` (unique, e.g. `sunny-santorini`), `name`, `country`, `region`, `days`, `price` (whole USD per traveler), `image_url`, `image_alt` |
-| `orders` | one checkout by one user | `id`, `user_id` → `user.id`, `status` (`pending` → `paid`, or `expired`), `total` (whole USD), `stripe_session_id` (unique), `created_at`, `paid_at` |
-| `order_items` | what was bought in an order, and at what price | `order_id` → `orders.id`, `tour_id` → `tours.id`, `travelers`, `unit_price` (copied from the tour at purchase time) |
+| `tours` | one tour or transfer we sell (the language-free part) | `id`, `slug` (unique, used in `/tours/:slug`), `category` (`day` / `hiking` / `private` / `transfer`), `price` (whole TRY), `price_unit` (`person` / `vehicle`), `max_guests`, `image_url`, `image_author` / `image_license` / `image_license_url` / `image_source_url`, `sort_order`, `active` |
+| `tour_translations` | the words for one tour in one language | `tour_id` → `tours.id`, `locale` (`en` / `tr`), `name`, `summary`, `duration`, `description`, `highlights[]`, `included[]`, `image_alt`. Unique per (`tour_id`, `locale`) |
+| `orders` | one checkout by one user | `id`, `user_id` → `user.id`, `status` (`pending` → `paid`, or `expired`), `total`, `currency` (`try`), `stripe_session_id` (unique), `created_at`, `paid_at` |
+| `order_items` | what was bought in an order, and at what price | `order_id` → `orders.id`, `tour_id` → `tours.id`, `travelers`, `unit_price` and `price_unit` (both copied from the tour at purchase time) |
 
 - **One user can have many sessions**, for example a laptop and a phone. Deleting a user deletes their sessions and accounts too (`on delete cascade`).
 - **One user has many orders, and one order has many items.** Booking Santorini for 2 and Kyoto for 3 in one checkout makes **one** `orders` row and **two** `order_items` rows.
 - `unit_price` is **copied** into `order_items`. If a tour's price changes later, old orders still show what the customer actually paid.
-- better-auth owns the four auth tables. Our own code works with `tours`, `orders` and `order_items`.
+- **Translations live in their own table**, one row per tour per language. Adding Arabic later means adding rows, not columns. If a translation is missing, the API falls back to English.
+- **Tours are archived (`active = false`), never deleted.** Old orders point at them through a foreign key. The API only lists and sells active tours.
+- **Two price units.** `person`: price × travelers (group tours). `vehicle`: one price for the whole van up to `max_guests` (private tours and transfers). The rule is `lineTotal()` in `server/src/lib/pricing.js`.
+- better-auth owns the four auth tables. Our own code works with `tours`, `tour_translations`, `orders` and `order_items`.
 
 ---
 
@@ -200,8 +224,9 @@ docker run -d --name wanderly-pg -e POSTGRES_USER=wanderly -e POSTGRES_PASSWORD=
 cd server
 npm install
 cp .env.example .env      # fill in DATABASE_URL and BETTER_AUTH_SECRET
+npm run db:upgrade        # only matters for a database from Weeks 2–4; does nothing otherwise
 npm run db:push           # create the tables from src/db/schema.js
-npm run db:seed           # insert the six tours
+npm run db:seed           # insert/update the 10 tours in English and Turkish
 npm run dev               # http://localhost:3001  (restarts on file changes)
 
 # 2. Frontend (second terminal)
@@ -222,7 +247,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 | `server/` | `npm run dev` | API with auto-restart (`node --watch`) |
 | `server/` | `npm start` | API without auto-restart (used by Railway) |
 | `server/` | `npm run db:push` | create or update the tables to match `schema.js` |
-| `server/` | `npm run db:seed` | insert the tours. Safe to re-run: existing slugs are skipped |
+| `server/` | `npm run db:seed` | insert or update the tours and their translations, archive tours no longer listed. Safe to re-run |
+| `server/` | `npm run db:upgrade` | one-time: remove the old Week 2–4 tour columns so `db:push` asks no questions. Safe to re-run |
 | `server/` | `npm run db:studio` | browse the database in the browser |
 | `client/` | `npm run dev` | Vite dev server |
 | `client/` | `npm run build` | production build into `client/dist/` |
@@ -240,6 +266,16 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 | `PORT` | `3001` | set by Railway |
 | `STRIPE_SECRET_KEY` | `sk_test_...` (Stripe Dashboard → Developers → API keys, **Test mode**) | same test key |
 | `STRIPE_WEBHOOK_SECRET` | the `whsec_...` printed by `stripe listen` | the signing secret of the Dashboard webhook endpoint |
+
+### Frontend settings (`client/.env.local`, or Vercel → Project → Environment Variables)
+
+All optional. Vite only exposes variables starting with `VITE_`, and they are baked in at **build** time.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `VITE_DEMO_MODE` | on | `false` removes the demo banner, hides the sample reviews and allows search engines to index the site. Only for a real business with real content. |
+| `VITE_WHATSAPP_NUMBER` | none | International format, e.g. `905551234567`. Shows "Ask on WhatsApp" buttons with the tour name already typed. Hidden when not set. |
+| `VITE_CONTACT_EMAIL` | `hello@wanderly.example` | Address for the "Email us" button. |
 
 ### Testing the webhook locally (Stripe CLI)
 ```bash
@@ -267,15 +303,17 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/health` | health check `{ ok: true, time }` |
-| GET | `/api/tours` | all tours, as JSON |
-| GET | `/api/tours/:slug` | one tour, or `404 { error }` |
+| GET | `/api/tours?lang=tr` | all active tours in that language (`en` is the default and the fallback) |
+| GET | `/api/tours/:slug?lang=tr` | one active tour, or `404` |
 | * | `/api/auth/*` | better-auth: `sign-up/email`, `sign-in/email`, `get-session`, `sign-out` |
-| POST | `/api/checkout` | 🔒 body `{ items: [{ tourId, travelers }, ...] }` → `{ url }` of one Stripe Checkout page for all of them |
-| GET | `/api/orders/:id` | 🔒 one of *your* orders with its items (someone else's → `404`) |
-| POST | `/api/stripe/webhook` | called by Stripe only. The signature is verified. Marks orders `paid` / `expired` |
-| * | any other `/api/*` | `404 { error: 'No such endpoint' }` |
+| POST | `/api/checkout` | 🔒 body `{ lang, items: [{ tourId, travelers }, ...] }` → `{ url }` of one Stripe Checkout page (in that language, in TRY) for all of them |
+| GET | `/api/orders/:id?lang=tr` | 🔒 one of *your* orders with its items and line totals (someone else's → `404`) |
+| POST | `/api/stripe/webhook` | called by Stripe only. The signature is verified. Marks orders `paid` / `expired`. Events without our `orderId` are acknowledged and ignored |
+| * | any other `/api/*` | `404` |
 
-🔒 = needs a signed-in user (`requireAuth`), otherwise `401 { error: 'Please sign in first.' }`.
+🔒 = needs a signed-in user (`requireAuth`), otherwise `401`.
+
+**Errors** are `{ error, code }`: `error` is an English sentence for logs and API users, and `code` (e.g. `TOO_MANY_TRAVELERS`, `SIGN_IN_REQUIRED`) is what the frontend translates. better-auth errors carry codes too (e.g. `INVALID_EMAIL_OR_PASSWORD`).
 
 ---
 
@@ -294,7 +332,8 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
    - In the Stripe Dashboard (Test mode), go to **Developers → Webhooks → Add endpoint**.
    - URL: `https://<your-vercel-app>.vercel.app/api/stripe/webhook`. Events: `checkout.session.completed` and `checkout.session.expired`.
    - Copy its signing secret into Railway as `STRIPE_WEBHOOK_SECRET`, and add `STRIPE_SECRET_KEY` there too.
-   - Run `npm run db:push` against Neon once more, so the `orders` and `order_items` tables exist.
+5. **Database update for the bilingual demo:** against Neon, run `npm run db:upgrade`, `npm run db:push`, `npm run db:seed`, in that order.
+6. **Optional:** set `VITE_WHATSAPP_NUMBER` in Vercel, then redeploy (Vite bakes it in at build time).
 
 ---
 
@@ -446,3 +485,43 @@ git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
   - A paid two-tour order shows both tours and **$3640** on the success page, and the plan empties.
   - No horizontal scroll at 320px.
 - The full Stripe payment (real test key + Stripe CLI + card 4242) is done with the real Stripe account.
+
+---
+
+### After the practicum: a bilingual Black Sea demo for a client pitch
+
+**Goal:** turn Wanderly into a convincing demo of a tour agency in the Black Sea highlands (Rize, Kaçkar, Trabzon), in **English and Turkish**, to show a real agency what a modern site for them could look like before negotiating the real project.
+
+1. **Fixed the three bugs from the code review first:**
+   - a name starting with a space (`" Ali"`) crashed the header and left a blank page. The name is now trimmed, the header never indexes an empty string, and **error boundaries** show a message instead of a blank page if anything else crashes;
+   - non-numeric ids (`/api/orders/abc`, `tourId: "x"`) reached Postgres as `NaN` and became `500`s. `parseId()` now turns them into `400`/`404`;
+   - a signed Stripe event without our `orderId` caused a `500`, so Stripe would keep retrying. It is now acknowledged with `200` and ignored.
+2. **New product range** like a real highlands agency: 4 day tours, 3 hikes (including a 4-day Kaçkar trek), a private VIP day and 2 airport transfers. Demo prices in Turkish lira.
+3. **Bilingual data model:** `tour_translations` (one row per tour per language), plus `category`, `price_unit` (`person` / `vehicle`), `max_guests` and `active` on `tours`. The seed script now **upserts** and **archives** instead of skipping, and `db:upgrade` moves an old database over without `drizzle-kit push` asking rename questions.
+4. **Bilingual API:** `?lang=` on tours and orders with English fallback. Checkout opens Stripe in the visitor's language, charges in TRY, and sells vans per vehicle (quantity 1) and group tours per traveler. Every error has a `code` the browser translates.
+5. **Bilingual frontend:** a small i18n module (context + `t()` + plural forms via `Intl.PluralRules` + prices via `Intl.NumberFormat`), an EN/TR switch, and language chosen from `?lang=`, the saved choice, or the browser's language. `<html lang>` and the tab title follow along.
+6. **A page for every tour** (`/tours/:slug`) with description, highlights, what's included, group size, a booking box and an "Ask on WhatsApp" button. Category filter kept in the URL (`/?category=transfer`), a 404 page, and a photo credits page.
+7. **Photos** of the real region from Wikimedia Commons (CC0 / CC BY / CC BY-SA), optimised and served from `client/public/images`, each credited.
+
+#### Demo mode
+
+`VITE_DEMO_MODE` is on unless set to `false`. In demo mode:
+- a banner on every page says the tours, prices and reviews are samples and payments are test-only;
+- the reviews section is labelled "sample" (with demo mode off, it is hidden until real reviews exist: invented reviews must never look real);
+- `<meta name="robots" content="noindex, nofollow">` is added to `index.html` at build time, so search engines don't list a sample agency.
+
+**Tested locally** against Postgres with a stubbed Stripe call (34 automated browser checks, headless Chrome):
+- English and Turkish home pages, the language switch, `?lang=tr` links, and Turkish browsers getting Turkish automatically;
+- prices `₺1,850` (EN) / `₺1.850` (TR);
+- category filter;
+- tour page in Turkish, with the stepper capped at the group size;
+- a van for 5 costs the same as a van for 1;
+- booking total ₺7.200 + ₺5.200 = **₺12.400**;
+- an old plan with an archived tour is cleaned up;
+- sign-up as `" Sara Yılmaz"` shows "Sara" with no crash;
+- checkout sends `locale: 'tr'` and `currency: 'try'`;
+- a signed webhook marks the order paid, the success page shows the van line, and the plan empties;
+- the credits page lists all 12 photos, and the 404 page works;
+- no horizontal scroll at 320px; no JavaScript errors.
+
+Also checked: all checkout validation codes, archived tours can't be booked, someone else's order gets `404`, and `db:upgrade` → `db:push` → `db:seed` on a Week 4 database (twice) needs no answers and loses no orders.
