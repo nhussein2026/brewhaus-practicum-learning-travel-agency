@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { orders } from '../db/schema.js'
 import { stripe } from '../lib/stripe.js'
+import { parseId } from '../lib/parse-id.js'
 
 export const webhookRouter = Router()
 
@@ -24,7 +25,14 @@ webhookRouter.post('/', express.raw({ type: 'application/json' }), async (req, r
   }
 
   const session = event.data.object
-  const orderId = Number(session.metadata?.orderId)
+  const orderId = parseId(session.metadata?.orderId)
+
+  // A real Stripe event that isn't about one of our orders (e.g. a Payment Link on the
+  // same Stripe account). Answer 200 so Stripe doesn't keep retrying it, and do nothing.
+  if (!orderId) {
+    console.log(`Ignored ${event.type}: no orderId in metadata`)
+    return res.json({ received: true })
+  }
 
   if (event.type === 'checkout.session.completed' && session.payment_status === 'paid') {
     // Only pending orders can become paid, so a repeated event changes nothing.
