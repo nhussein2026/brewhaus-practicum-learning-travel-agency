@@ -34,6 +34,8 @@ done
 
 # 3. Optional: create the tables and seed the tours.
 if [ "${1:-}" = "--setup" ]; then
+  echo "Removing old tour columns (safe to repeat)..."
+  (cd "$SERVER" && npm run db:upgrade)
   echo "Pushing the database schema..."
   (cd "$SERVER" && npm run db:push)
   echo "Seeding tours..."
