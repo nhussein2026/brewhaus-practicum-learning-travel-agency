@@ -26,20 +26,21 @@ export function TripPlanProvider({ children }) {
     }
   }, [plans])
 
+  // useCallback keeps the same function between renders, so pages can safely list these in an effect's dependencies.
+
   // Adds a tour, or changes its traveler count if it is already in the plan.
-  function savePlan(tourId, travelers) {
+  const savePlan = useCallback((tourId, travelers) => {
     setPlans((current) =>
       current.some((plan) => plan.tourId === tourId)
         ? current.map((plan) => (plan.tourId === tourId ? { ...plan, travelers } : plan))
         : [...current, { tourId, travelers }],
     )
-  }
+  }, [])
 
-  function removePlan(tourId) {
+  const removePlan = useCallback((tourId) => {
     setPlans((current) => current.filter((plan) => plan.tourId !== tourId))
-  }
+  }, [])
 
-  // useCallback keeps the same function between renders, so pages can safely list it in an effect's dependencies.
   const clearPlans = useCallback(() => setPlans([]), [])
 
   return (

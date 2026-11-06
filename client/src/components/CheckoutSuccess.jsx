@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { useTripPlan } from '../lib/trip-plan'
+import { useI18n } from '../lib/i18n'
+import { errorMessage } from '../lib/errors'
 
 const MAX_TRIES = 6
 const RETRY_MS = 1500
@@ -9,6 +11,7 @@ const RETRY_MS = 1500
 // Stripe's webhook can arrive a moment after this redirect, so while the
 // order still says 'pending' we ask the API again a few times.
 export function CheckoutSuccess() {
+  const { lang, t, formatPrice } = useI18n()
   const [params] = useSearchParams()
   const orderId = params.get('order')
   const [order, setOrder] = useState(null)
@@ -28,56 +31,61 @@ export function CheckoutSuccess() {
 
     async function check(attempt) {
       try {
-        const response = await fetch(`/api/orders/${orderId}`)
+        const response = await fetch(`/api/orders/${encodeURIComponent(orderId ?? '')}?lang=${lang}`)
         const data = await response.json()
         if (cancelled) return
-        if (!response.ok) throw new Error(data.error ?? 'Could not load your order')
+        if (!response.ok) {
+          setError(errorMessage(t, data.code))
+          return
+        }
 
         setOrder(data)
         if (data.status === 'pending') {
           if (attempt < MAX_TRIES) timer = setTimeout(() => check(attempt + 1), RETRY_MS)
           else setGaveUp(true)
         }
-      } catch (err) {
-        if (!cancelled) setError(err.message)
+      } catch {
+        if (!cancelled) setError(t('errors.network'))
       }
     }
 
     check(1)
-    // Stop polling if the user leaves the page.
+    // Stop polling if the user leaves the page (or switches language, which starts a fresh check).
     return () => {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [orderId])
+    // t is rebuilt only when the language changes, so this re-runs on a new order id or language.
+  }, [orderId, lang, t])
 
   return (
     <main className="mx-auto w-[90%] max-w-lg py-[58px] sm:py-[82px]">
       {error ? (
-        <Message eyebrow="SOMETHING WENT WRONG" title="We couldn't find that order.">
+        <Message eyebrow={t('success.errorEyebrow')} title={t('success.errorTitle')}>
           {error}
         </Message>
       ) : !order || (order.status === 'pending' && !gaveUp) ? (
-        <Message eyebrow="ONE MOMENT" title="Confirming your payment...">
-          Stripe is letting us know your payment went through.
+        <Message eyebrow={t('success.waitEyebrow')} title={t('success.waitTitle')}>
+          {t('success.waitText')}
         </Message>
       ) : order.status === 'paid' ? (
         <>
-          <Message eyebrow="PAYMENT RECEIVED" title="You're going on a trip!">
-            Order #{order.id} is <strong className="text-brand">paid</strong>. Thank you for booking with Wanderly.
+          <Message eyebrow={t('success.paidEyebrow')} title={t('success.paidTitle')}>
+            {t('success.paidText', { id: order.id })}
           </Message>
-          <OrderSummary order={order} />
+          <OrderSummary order={order} t={t} formatPrice={formatPrice} />
         </>
       ) : (
-        <Message eyebrow={`ORDER #${order.id}`} title={`Status: ${order.status}`}>
-          {order.status === 'pending'
-            ? "We haven't received Stripe's confirmation yet. Refresh this page in a minute."
-            : 'This checkout was not completed, so you have not been charged.'}
+        <Message
+          eyebrow={t('success.statusEyebrow', { id: order.id })}
+          title={t('success.statusTitle', { status: t(`success.statuses.${order.status}`) })}
+        >
+          {order.status === 'pending' ? t('success.stillPending') : t('success.notCompleted')}
         </Message>
       )}
 
       <Link to="/" className="mt-8 inline-block font-bold text-brand">
-        ← Back to all tours
+        {t('success.back')}
       </Link>
     </main>
   )
@@ -93,23 +101,26 @@ function Message({ eyebrow, title, children }) {
   )
 }
 
-function OrderSummary({ order }) {
+function OrderSummary({ order, t, formatPrice }) {
+  const money = (amount) => formatPrice(amount, order.currency)
   return (
-    <div className="mt-8 rounded-lg bg-mist p-6">
+    <div className="mt-8 space-y-2 rounded-lg bg-mist p-6">
       {order.items.map((item) => (
-        <div key={item.tourName} className="flex flex-wrap justify-between gap-2">
-          <span>
+        <div key={item.tourId} className="flex flex-wrap justify-between gap-2">
+          <span className="min-w-0">
             <strong className="text-forest">{item.tourName}</strong>
-            <span className="text-muted">, {item.country} · {item.days} days</span>
+            {item.duration && <span className="text-muted"> · {item.duration}</span>}
           </span>
           <span className="text-muted">
-            {item.travelers} × ${item.unitPrice}
+            {item.priceUnit === 'vehicle'
+              ? `${t('success.vehicle', { count: item.travelers })} · ${money(item.lineTotal)}`
+              : `${item.travelers} × ${money(item.unitPrice)}`}
           </span>
         </div>
       ))}
       <div className="mt-4 flex justify-between border-t border-line pt-4 font-bold text-forest">
-        <span>Total paid</span>
-        <span>${order.total}</span>
+        <span>{t('success.totalPaid')}</span>
+        <span>{money(order.total)}</span>
       </div>
     </div>
   )
