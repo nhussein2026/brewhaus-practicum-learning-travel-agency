@@ -1,68 +1,57 @@
-import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router'
+import { useI18n } from '../lib/i18n'
+import { useTours } from '../lib/use-tours'
 import { SectionHeading } from './SectionHeading'
 import { TourCard } from './TourCard'
 
-const regions = ['All', 'Europe', 'Asia', 'Middle East']
+const categories = ['all', 'day', 'hiking', 'private', 'transfer']
 
 export function Tours() {
-  const [tours, setTours] = useState([])
-  const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
-  // The selected region is the only filter state. The visible list is derived from it on every render.
-  const [region, setRegion] = useState('All')
+  const { t } = useI18n()
+  const { tours, status } = useTours()
+  // The chosen category lives in the URL (?category=hiking), so a filtered list can be shared as a link.
+  // The visible list is still derived on every render, not stored in state.
+  const [params, setParams] = useSearchParams()
+  const category = categories.includes(params.get('category')) ? params.get('category') : 'all'
+  const filtered = category === 'all' ? tours : tours.filter((tour) => tour.category === category)
 
-  // Load the tours from our API once, when the section first appears.
-  useEffect(() => {
-    async function loadTours() {
-      try {
-        const response = await fetch('/api/tours')
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        setTours(await response.json())
-        setStatus('ready')
-      } catch (err) {
-        console.error('Failed to load tours', err)
-        setStatus('error')
-      }
-    }
-
-    loadTours()
-  }, [])
-
-  const filtered = region === 'All' ? tours : tours.filter((tour) => tour.region === region)
+  function choose(name) {
+    setParams(name === 'all' ? {} : { category: name }, { replace: true, preventScrollReset: true })
+  }
 
   return (
     <section id="tours" aria-labelledby="tours-title" className="mx-auto w-[90%] max-w-[1100px] py-[58px] sm:py-[82px]">
-      <SectionHeading eyebrow="CHOOSE YOUR ADVENTURE" title="Popular tour packages" id="tours-title">
-        Handpicked trips for your next unforgettable getaway.
+      <SectionHeading eyebrow={t('tours.eyebrow')} title={t('tours.title')} id="tours-title">
+        {t('tours.intro')}
       </SectionHeading>
 
-      <div className="mb-8 flex flex-wrap justify-center gap-2" role="group" aria-label="Filter tours by region">
-        {regions.map((name) => (
+      <div className="mb-8 flex flex-wrap justify-center gap-2" role="group" aria-label={t('tours.filterLabel')}>
+        {categories.map((name) => (
           <button
             key={name}
             type="button"
-            onClick={() => setRegion(name)}
-            aria-pressed={region === name}
-            className={`rounded-full px-4 py-1.5 text-sm transition ${
-              region === name
-                ? 'bg-brand text-white'
-                : 'border border-line text-muted hover:border-brand hover:text-brand'
+            onClick={() => choose(name)}
+            aria-pressed={category === name}
+            className={`cursor-pointer rounded-full px-4 py-1.5 text-sm transition ${
+              category === name ? 'bg-brand text-white' : 'border border-line text-muted hover:border-brand hover:text-brand'
             }`}
           >
-            {name}
+            {t(`tours.categories.${name}`)}
           </button>
         ))}
       </div>
 
-      {status === 'loading' && <p className="text-center text-muted">Loading tours...</p>}
+      {status === 'loading' && <p className="text-center text-muted">{t('tours.loading')}</p>}
       {status === 'error' && (
         <p role="alert" className="text-center text-muted">
-          We couldn't load the tours right now. Please try again in a moment.
+          {t('tours.error')}
         </p>
       )}
+      {status === 'ready' && filtered.length === 0 && <p className="text-center text-muted">{t('tours.empty')}</p>}
 
-      {/* 1 column on phones, 2 from sm, 3 from md. */}
-      {status === 'ready' && (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+      {/* 1 column on phones, 2 from sm, 3 from lg. */}
+      {status === 'ready' && filtered.length > 0 && (
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((tour) => (
             <TourCard key={tour.id} tour={tour} />
           ))}

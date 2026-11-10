@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, boolean, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, serial, text, integer, boolean, timestamp, unique } from 'drizzle-orm/pg-core'
 
 // ---------------------------------------------------------------------------
 // Auth tables: the shape better-auth expects. better-auth reads and writes
@@ -56,20 +56,48 @@ export const verification = pgTable('verification', {
 })
 
 // ---------------------------------------------------------------------------
-// Our data: one row per tour package shown on the site.
+// Our data: one row per tour (or transfer) we sell.
+// Everything that does NOT depend on the language lives here. The words
+// (name, description, ...) live in tour_translations, one row per language.
 // ---------------------------------------------------------------------------
 export const tours = pgTable('tours', {
   id: serial('id').primaryKey(),
-  slug: text('slug').notNull().unique(), // e.g. 'sunny-santorini'; lets the seed script skip tours that already exist
-  name: text('name').notNull(),
-  country: text('country').notNull(),
-  region: text('region').notNull(), // 'Europe' | 'Asia' | 'Middle East', used by the filter
-  days: integer('days').notNull(),
-  price: integer('price').notNull(), // starting price per traveler, whole US dollars
+  slug: text('slug').notNull().unique(), // e.g. 'pokut-sal-sunset'; used in the URL /tours/:slug
+  category: text('category').notNull().default('day'), // 'day' | 'hiking' | 'private' | 'transfer', used by the filter
+  price: integer('price').notNull(), // whole Turkish lira (TRY)
+  priceUnit: text('price_unit').notNull().default('person'), // 'person' (price × travelers) | 'vehicle' (one price for the group)
+  maxGuests: integer('max_guests').notNull().default(10), // group size limit, e.g. the 8 seats of a VIP van
   imageUrl: text('image_url').notNull(),
-  imageAlt: text('image_alt').notNull(),
+  // Where the photo came from, for the credits page (most open licences require it).
+  imageAuthor: text('image_author'),
+  imageLicense: text('image_license'), // e.g. 'CC BY-SA 4.0'
+  imageLicenseUrl: text('image_license_url'),
+  imageSourceUrl: text('image_source_url'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  // Tours are archived, never deleted: old orders still point at them.
+  active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
+
+// The words for one tour in one language. Adding a language later (e.g. Arabic)
+// means adding rows, not changing the table.
+export const tourTranslations = pgTable(
+  'tour_translations',
+  {
+    id: serial('id').primaryKey(),
+    tourId: integer('tour_id').notNull().references(() => tours.id, { onDelete: 'cascade' }),
+    locale: text('locale').notNull(), // 'en' | 'tr'
+    name: text('name').notNull(),
+    summary: text('summary').notNull(), // one line for the tour card
+    duration: text('duration').notNull(), // e.g. 'Full day · about 9 hours'
+    description: text('description').notNull(),
+    highlights: text('highlights').array().notNull(),
+    included: text('included').array().notNull(),
+    imageAlt: text('image_alt').notNull(),
+  },
+  // At most one translation per tour per language.
+  (table) => [unique('tour_translations_tour_locale').on(table.tourId, table.locale)],
+)
 
 // ---------------------------------------------------------------------------
 // Orders: one row per checkout attempt. It starts as 'pending' and only the
@@ -79,7 +107,8 @@ export const orders = pgTable('orders', {
   id: serial('id').primaryKey(),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   status: text('status').notNull().default('pending'), // 'pending' | 'paid' | 'expired'
-  total: integer('total').notNull(), // whole US dollars, worked out on the server
+  total: integer('total').notNull(), // whole units of `currency`, worked out on the server
+  currency: text('currency').notNull().default('try'), // an amount without its currency is ambiguous
   stripeSessionId: text('stripe_session_id').unique(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   paidAt: timestamp('paid_at'),
@@ -92,5 +121,6 @@ export const orderItems = pgTable('order_items', {
   orderId: integer('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
   tourId: integer('tour_id').notNull().references(() => tours.id),
   travelers: integer('travelers').notNull(),
-  unitPrice: integer('unit_price').notNull(), // whole US dollars per traveler
+  unitPrice: integer('unit_price').notNull(), // the tour's price at that moment
+  priceUnit: text('price_unit').notNull().default('person'), // copied too: 'person' or 'vehicle'
 })

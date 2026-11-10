@@ -37,12 +37,12 @@ app.get('/api/health', (_req, res) => {
 
 // Any other /api path is a JSON 404.
 app.use('/api/*splat', (_req, res) => {
-  res.status(404).json({ error: 'No such endpoint' })
+  res.status(404).json({ error: 'No such endpoint', code: 'NO_ENDPOINT' })
 })
 
 app.use((err, _req, res, _next) => {
   console.error(err)
-  res.status(500).json({ error: 'Something broke on our side.' })
+  res.status(500).json({ error: 'Something broke on our side.', code: 'SERVER_ERROR' })
 })
 
 app.listen(PORT, () => {
