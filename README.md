@@ -1,527 +1,124 @@
-# Wanderly Travel: BrewHaus Practicum
+<!-- readme-standard: 1.1 -->
+# Wanderly Travel
 
-Wanderly is a website for a travel agency, built during the BrewHaus Practicum. The project grows week by week:
+## Overview
 
-- Week 1 was a static HTML/CSS page.
-- Week 2 rebuilt it with React + Tailwind.
-- Week 3 added a real backend, a Postgres database, login, and deployment.
-- Week 4 added real payments with Stripe Checkout (test mode).
-- After the practicum, it became a **bilingual (English / Turkish) demo of a Black Sea highlands tour agency**, built to pitch to a real agency in the region.
+Wanderly is a full-stack booking site for a tour agency in Turkey's Black Sea highlands (Rize, Kaçkar, Trabzon), in English and Turkish. Visitors browse tours and airport transfers, put several of them in a trip plan, sign in, and pay for all of them at once with Stripe Checkout. A signed Stripe webhook is the only thing that marks an order as paid.
 
-The **Development story** below covers each step.
+> **This is a demo.** A banner on every page says the tours, prices and reviews are samples. Payments run in Stripe test mode, and search engines are asked not to index the site.
 
-> **This is a demo.** A banner on every page says the tours, prices and reviews are samples, payments run in Stripe test mode, and search engines are asked not to index it. See [Demo mode](#demo-mode).
+## Project Journey
 
----
+I built Wanderly during the BrewHaus Practicum between October and November 2026, one assignment a week: a static HTML/CSS page, then a React and Tailwind rebuild, then a Postgres backend with sign-in, then Stripe payments. In November 2026 I turned it into a bilingual demo of a Black Sea tour agency, to show a regional agency what a modern site could look like.
 
-## Tech stack
+- **Role:** Sole developer
+- **Team:** Solo
+- **Dates:** Oct 2026 – Nov 2026
+- **AI use:** The bilingual demo (November 2026) was written with Claude Code; I directed, reviewed and tested it.
 
-| Part | Tool | Version | What it does here |
-|---|---|---|---|
-| UI library | [React](https://react.dev) | 19 | Splits the page into components. Handles state with `useState` / `useEffect`. |
-| Routing | [React Router](https://reactrouter.com) | 8 | `/`, `/tours/:slug`, `/booking`, `/login`, `/signup`, `/checkout/success`, `/credits`, and a 404 page. |
-| Languages | Own small i18n module + `Intl` | | English and Turkish. Text in `client/src/i18n/`, prices formatted with `Intl.NumberFormat`. |
-| Build tool / dev server | [Vite](https://vite.dev) | 8 | Dev server with instant reload, a `/api` proxy, and the production bundle. |
-| Styling | [Tailwind CSS](https://tailwindcss.com) | 4 | Utility classes. Brand colours live in an `@theme` block. |
-| API server | [Express](https://expressjs.com) | 5 | JSON API under `/api`. |
-| Database | PostgreSQL ([Neon](https://neon.tech)) | 17 | Stores users, sessions and tours. |
-| ORM | [Drizzle ORM](https://orm.drizzle.team) + `drizzle-kit` | 0.45 / 0.31 | The schema is written in JavaScript. `drizzle-kit push` creates the tables. |
-| DB driver | `postgres` (postgres.js) | 4 | The connection Drizzle uses. |
-| Auth | [better-auth](https://www.better-auth.com) | 1.7 | Email + password sign-up and sign-in. Sessions are stored in the database and kept in a cookie. |
-| Payments | [Stripe](https://stripe.com) Checkout (`stripe` npm package) | 23 | Hosted payment page in test mode. A signed webhook confirms each payment. |
-| Hosting | Vercel (client), Railway (server) | | Both parts are live on public URLs. |
-| Linting | oxlint | 1 | `npm run lint` in `client/`. |
-| Runtime | Node.js | 20+ (built with 22) | |
+## Project Status
 
-Plain JavaScript everywhere (no TypeScript).
+**Completed.** The practicum work and the bilingual demo are finished and run locally. The site is not deployed yet.
 
----
+## Technologies
 
-## Project structure
+| Category | Used |
+| --- | --- |
+| Languages | JavaScript (no TypeScript), HTML, CSS |
+| Frameworks and Libraries | React 19, React Router 8, Tailwind CSS 4, Express 5, better-auth 1.7, Stripe (`stripe` 23) |
+| Databases | PostgreSQL 17 (Neon or Docker), Drizzle ORM 0.45 and drizzle-kit 0.31, postgres.js 4 |
+| Infrastructure and DevOps | Vercel (frontend) and Railway (API) configs, Stripe CLI for local webhooks |
+| Development Tools | Vite 8, oxlint, Node.js 20+ |
 
-```
-.
-├── start.sh                     runs the API, frontend and Stripe forwarder together
-├── client/                      React app (deployed to Vercel)
-│   ├── index.html               Vite entry (a #root div + script tag)
-│   ├── vite.config.js           React + Tailwind plugins, dev proxy /api → http://localhost:3001
-│   ├── vercel.json              production: /api/* → Railway, everything else → index.html
-│   ├── public/images/           the tour and page photos (Wikimedia Commons, credited on /credits)
-│   └── src/
-│       ├── main.jsx             mounts <App />
-│       ├── App.jsx              providers (language, trip plan), error boundaries, routes
-│       ├── index.css            Tailwind import + @theme colours
-│       ├── i18n/en.js, tr.js    every sentence of the site, in English and Turkish (same keys)
-│       ├── lib/i18n.jsx         language context: useI18n() → { lang, setLang, t, formatPrice }
-│       ├── lib/config.js        VITE_* settings: demo mode, WhatsApp number, contact email
-│       ├── lib/use-tours.js     loads /api/tours in the current language
-│       ├── lib/pricing.js       lineTotal(): per person vs per vehicle (display only)
-│       ├── lib/errors.js        API/auth error code → message in the current language
-│       ├── lib/auth-client.js   better-auth client: signIn, signUp, signOut, useSession
-│       ├── lib/trip-plan.jsx    the trip plan (cart): which tours + how many travelers, shared via context
-│       ├── data/reviews.js      SAMPLE reviews (shown only in demo mode)
-│       ├── data/site-photos.js  hero/about photos and their credits
-│       └── components/
-│           ├── Header.jsx           page links · EN/TR switch · account · "My trip (N)" button
-│           ├── DemoBanner.jsx       "this is a demo" strip (demo mode only)
-│           ├── Tours.jsx            tour grid with a category filter kept in the URL (?category=hiking)
-│           ├── TourCard.jsx         one tour card, links to its page
-│           ├── TourPage.jsx         /tours/:slug: description, highlights, included, booking box, WhatsApp
-│           ├── TripPlanControls.jsx stepper + total + "Add to trip plan" (card and tour page)
-│           ├── BookingPage.jsx      /booking: review every chosen tour + total, then one payment
-│           ├── CheckoutSuccess.jsx  after payment: polls /api/orders/:id until it says paid
-│           ├── Credits.jsx          /credits: photographer + licence for every photo
-│           ├── ErrorBoundary.jsx    shows a message instead of a blank page if something crashes
-│           └── AuthForm, TravelerStepper, LanguageSwitcher, WhatsAppButton, NotFound,
-│               Hero, About, Reviews, PlanTrip, Footer, SectionHeading, Logo, ScrollToTop
-│
-└── server/                      Express API (deployed to Railway)
-    ├── .env.example             template for the secrets (.env itself is git-ignored)
-    ├── drizzle.config.js        tells drizzle-kit where the schema and database are
-    ├── railway.json             start command + health check for Railway
-    └── src/
-        ├── index.js             Express app: CORS, auth handler, routes, 404 + error handler
-        ├── auth.js              better-auth config (database, email/password, session length)
-        ├── middleware/
-        │   └── requireAuth.js   blocks the request with 401 unless signed in; sets req.user
-        ├── lib/stripe.js        Stripe client (reads STRIPE_SECRET_KEY)
-        ├── lib/locale.js        ?lang= → 'en' | 'tr', and loading translations with English fallback
-        ├── lib/pricing.js       CURRENCY ('try') and lineTotal(): the one pricing rule
-        ├── lib/parse-id.js      turns outside input into a positive integer id, or null
-        ├── routes/
-        │   ├── tours.js         GET /api/tours, GET /api/tours/:slug (?lang=en|tr)
-        │   ├── checkout.js      POST /api/checkout: creates the order and the Stripe session
-        │   ├── webhook.js       POST /api/stripe/webhook: the only place an order becomes 'paid'
-        │   └── orders.js        GET /api/orders/:id: one of your own orders
-        └── db/
-            ├── schema.js        all tables
-            ├── index.js         database connection (reads DATABASE_URL)
-            ├── tours.data.js    the 10 Black Sea tours, each in English and Turkish, with photo credits
-            ├── seed.js          upserts the tours + translations, archives tours no longer listed
-            └── upgrade.js       one-time: removes the old Week 2–4 tour columns before db:push
-```
+## How to Run
 
----
+Prerequisites: Node.js 20 or newer and a PostgreSQL database. A free Neon project works, or a local Docker container:
 
-## Database schema (in plain English)
-
-| Table | One row is… | Key columns |
-|---|---|---|
-| `user` | a person who signed up | `id`, `name`, `email` (unique) |
-| `account` | how that user logs in. For email + password, it holds the **hashed** password | `user_id` → `user.id`, `provider_id` = `credential`, `password` |
-| `session` | one signed-in browser | `token` (stored in the cookie), `expires_at`, `user_id` → `user.id` |
-| `verification` | a short-lived code (email verification / password reset). Not used yet | `identifier`, `value`, `expires_at` |
-| `tours` | one tour or transfer we sell (the language-free part) | `id`, `slug` (unique, used in `/tours/:slug`), `category` (`day` / `hiking` / `private` / `transfer`), `price` (whole TRY), `price_unit` (`person` / `vehicle`), `max_guests`, `image_url`, `image_author` / `image_license` / `image_license_url` / `image_source_url`, `sort_order`, `active` |
-| `tour_translations` | the words for one tour in one language | `tour_id` → `tours.id`, `locale` (`en` / `tr`), `name`, `summary`, `duration`, `description`, `highlights[]`, `included[]`, `image_alt`. Unique per (`tour_id`, `locale`) |
-| `orders` | one checkout by one user | `id`, `user_id` → `user.id`, `status` (`pending` → `paid`, or `expired`), `total`, `currency` (`try`), `stripe_session_id` (unique), `created_at`, `paid_at` |
-| `order_items` | what was bought in an order, and at what price | `order_id` → `orders.id`, `tour_id` → `tours.id`, `travelers`, `unit_price` and `price_unit` (both copied from the tour at purchase time) |
-
-- **One user can have many sessions**, for example a laptop and a phone. Deleting a user deletes their sessions and accounts too (`on delete cascade`).
-- **One user has many orders, and one order has many items.** Booking Santorini for 2 and Kyoto for 3 in one checkout makes **one** `orders` row and **two** `order_items` rows.
-- `unit_price` is **copied** into `order_items`. If a tour's price changes later, old orders still show what the customer actually paid.
-- **Translations live in their own table**, one row per tour per language. Adding Arabic later means adding rows, not columns. If a translation is missing, the API falls back to English.
-- **Tours are archived (`active = false`), never deleted.** Old orders point at them through a foreign key. The API only lists and sells active tours.
-- **Two price units.** `person`: price × travelers (group tours). `vehicle`: one price for the whole van up to `max_guests` (private tours and transfers). The rule is `lineTotal()` in `server/src/lib/pricing.js`.
-- better-auth owns the four auth tables. Our own code works with `tours`, `tour_translations`, `orders` and `order_items`.
-
----
-
-## How auth works
-
-1. **Sign-up / sign-in.** `AuthForm` calls `signUp.email(...)` or `signIn.email(...)` from `client/src/lib/auth-client.js`, which sends a POST to `/api/auth/sign-up/email` or `/api/auth/sign-in/email`.
-2. **On the server**, `app.all('/api/auth/*splat', toNodeHandler(auth))` hands the request to better-auth. better-auth then:
-   - hashes the password,
-   - creates rows in `user` and `account`,
-   - creates a row in `session`,
-   - sends back an **httpOnly cookie** holding the session token. Page JavaScript can't read an httpOnly cookie, which protects it.
-3. **Signed-in state.** `useSession()` in `Header` calls `/api/auth/get-session`. The browser sends the cookie automatically, and the server finds the matching `session` row. The header shows **"Hi, name · Sign out"** or **"Sign in"**.
-4. **Refresh-proof.** The session lives in the database and the cookie lasts 7 days, so a page refresh keeps you signed in.
-5. **Sign out** calls `/api/auth/sign-out`. That deletes the session row and clears the cookie.
-
-**Why `/api` is always same-origin:**
-- In development, Vite proxies `/api` to `localhost:3001`.
-- In production, `vercel.json` rewrites `/api/*` to Railway.
-
-So the browser only ever talks to one domain, and cookies just work. The frontend needs no environment variables.
-
----
-
-## How payments work (Stripe Checkout, test mode)
-
-```
-Browser                         Our API                                  Stripe
-───────                         ───────                                  ──────
-"Add to trip plan" on one or more tours (kept in the browser, nothing paid)
-/booking: review tours, travelers, totals
-"Proceed to payment" ── POST /api/checkout {items: [{tourId, travelers}, ...]} ──▶
-                                requireAuth: signed in? (else 401)
-                                look up every tour's REAL price in Postgres
-                                insert ONE order (pending) + one order_items row per tour
-                                create Checkout Session ───────────────▶
-                         ◀───── { url } ◀──────────────────────────────── session.url
-redirect to Stripe ───────────────────────────────────────────────────▶ hosted payment page
-                                                                         card 4242 4242 4242 4242
-                                POST /api/stripe/webhook ◀────────────── checkout.session.completed
-                                verify Stripe signature
-                                order → 'paid'
-redirect to /checkout/success?order=ID ◀────────────────────────────────
-CheckoutSuccess polls GET /api/orders/ID until status = 'paid'
-```
-
-0. **The trip plan (cart).** `client/src/lib/trip-plan.jsx` holds the chosen tours as `[{ tourId, travelers }]`.
-   - It's shared with React **context**, so `TourCard` (Add to trip plan), `Header` (My trip count) and `BookingPage` all see the same list.
-   - It's copied into `localStorage`, so a refresh or the detour through sign-in keeps it.
-   - `/booking` shows each tour with a stepper, a line total and Remove, plus the grand total. Nothing is charged until **Proceed to payment**.
-   - Signed out, that button reads **Sign in to book** and goes to `/login?next=/booking`, which returns you to the plan afterwards.
-   - The plan is cleared once the success page sees the order is `paid`.
-1. **Login check.** `requireAuth` (`server/src/middleware/requireAuth.js`) asks better-auth for the session that matches the request's cookie. If there is none, the request stops with `401`. Otherwise it sets `req.user`, so every order belongs to a real user.
-2. **Never trust the browser's price.** The client sends only `{ tourId, travelers }` for each tour. `checkout.js`:
-   - checks there are 1–10 tours, no tour twice, and 1–10 travelers each,
-   - reads every `tour.price` from the database in one query (a missing tour gets `404`),
-   - works out the total,
-   - saves **one** `pending` order with one `order_items` row per tour, in one transaction,
-   - gives Stripe one line item per tour,
-   - creates the Stripe session with `metadata.orderId` and returns `session.url`.
-   
-   If Stripe refuses, the order is deleted again.
-3. **The webhook is the only thing that marks an order paid.** Stripe calls `POST /api/stripe/webhook` itself.
-   - The route gets the **raw** body, because it's mounted before `express.json()`.
-   - `stripe.webhooks.constructEvent` checks Stripe's signature using `STRIPE_WEBHOOK_SECRET`. A forged request gets `400`.
-   - On `checkout.session.completed` with `payment_status: 'paid'`, the order goes from `pending` to `paid` and `paid_at` is set.
-   - On `checkout.session.expired`, it goes to `expired`.
-   - Only `pending` orders are updated, so if Stripe sends the same event twice, nothing changes the second time.
-4. **The success page doesn't decide anything.** The success URL alone proves nothing, because anyone can type it in. `CheckoutSuccess` asks `GET /api/orders/:id`, which returns only the signed-in user's own orders. The webhook can arrive a moment after the redirect, so while the order is still `pending` the page asks again every 1.5 s, up to 6 times.
-
-**Test card:** `4242 4242 4242 4242`, any future expiry date, any CVC, any postcode.
-
----
-
-## Running locally
-
-### Quick start: `start.sh`
-```bash
-./start.sh            # installs packages if needed, then starts everything
-./start.sh --setup    # also creates/updates the tables and seeds the tours first
-```
-It needs `server/.env` (see below), and it:
-- starts the API on **:3001** and waits until it responds,
-- starts `stripe listen --forward-to localhost:3001/api/stripe/webhook`, if the Stripe CLI is installed,
-- starts the frontend on **:5173**.
-
-**Ctrl+C** stops all of them.
-
-### Step by step
-
-Requires Node 20+ and a Postgres database. A free Neon project works, or a local Docker container:
 ```bash
 docker run -d --name wanderly-pg -e POSTGRES_USER=wanderly -e POSTGRES_PASSWORD=wanderly \
   -e POSTGRES_DB=wanderly -p 127.0.0.1:5440:5432 postgres:17-alpine
-# DATABASE_URL="postgresql://wanderly:wanderly@127.0.0.1:5440/wanderly"
 ```
 
 ```bash
-# 1. Backend
-cd server
-npm install
-cp .env.example .env      # fill in DATABASE_URL and BETTER_AUTH_SECRET
-npm run db:upgrade        # only matters for a database from Weeks 2–4; does nothing otherwise
-npm run db:push           # create the tables from src/db/schema.js
-npm run db:seed           # insert/update the 10 tours in English and Turkish
-npm run dev               # http://localhost:3001  (restarts on file changes)
-
-# 2. Frontend (second terminal)
-cd client
-npm install
-npm run dev               # http://localhost:5173  (/api is proxied to :3001)
+git clone https://github.com/nhussein2026/brewhaus-practicum-learning-travel-agency.git
+cd brewhaus-practicum-learning-travel-agency
+cp server/.env.example server/.env   # then fill in the values
+./start.sh --setup                   # install, create the tables, seed the tours, start everything
 ```
 
-Generate a `BETTER_AUTH_SECRET` with:
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+`start.sh` starts the API on http://localhost:3001, the site on http://localhost:5173 and, if the Stripe CLI is installed, `stripe listen` for the webhook. Ctrl+C stops all of them. Without `--setup` it skips the database step.
+
+Configuration (`server/.env`): `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `CLIENT_URL`, `PORT`, `STRIPE_SECRET_KEY` (test mode) and `STRIPE_WEBHOOK_SECRET`. The frontend has three optional settings: `VITE_DEMO_MODE`, `VITE_WHATSAPP_NUMBER` and `VITE_CONTACT_EMAIL`.
+
+Pay with the Stripe test card `4242 4242 4242 4242`, any future date and any CVC. Lint the frontend with `npm run lint` in `client/`.
+
+The step-by-step setup, every script and setting, and deployment are in [docs/running-and-deployment.md](docs/running-and-deployment.md).
+
+## Project Structure
+
+```text
+.
+├── start.sh            runs the API, the frontend and the Stripe forwarder together
+├── client/             React app (Vite, Tailwind), meant for Vercel
+│   ├── public/images/  tour and page photos from Wikimedia Commons
+│   └── src/
+│       ├── components/ pages and parts: tours, tour page, booking, checkout success, sign-in, credits
+│       ├── i18n/       every sentence of the site in English and Turkish
+│       └── lib/        language context, trip plan (cart), auth client, pricing, settings
+├── server/             Express API, meant for Railway
+│   └── src/
+│       ├── routes/     tours, checkout, orders, Stripe webhook
+│       ├── db/         Drizzle schema, the 10 tours in both languages, seed and upgrade scripts
+│       ├── middleware/ requireAuth
+│       └── lib/        Stripe client, pricing rule, language fallback, id parsing
+└── docs/               architecture, running and deployment, development story
 ```
 
-### Scripts
+## Learning
 
-| Where | Command | What it does |
-|---|---|---|
-| `server/` | `npm run dev` | API with auto-restart (`node --watch`) |
-| `server/` | `npm start` | API without auto-restart (used by Railway) |
-| `server/` | `npm run db:push` | create or update the tables to match `schema.js` |
-| `server/` | `npm run db:seed` | insert or update the tours and their translations, archive tours no longer listed. Safe to re-run |
-| `server/` | `npm run db:upgrade` | one-time: remove the old Week 2–4 tour columns so `db:push` asks no questions. Safe to re-run |
-| `server/` | `npm run db:studio` | browse the database in the browser |
-| `client/` | `npm run dev` | Vite dev server |
-| `client/` | `npm run build` | production build into `client/dist/` |
-| `client/` | `npm run preview` | serve the production build locally |
-| `client/` | `npm run lint` | oxlint |
+### Objectives
+- Build the same site three times over (static HTML/CSS, React, full stack) and see what each layer adds.
+- Connect a React frontend to my own API and a real database.
+- Add real sign-in and real (test-mode) payments without trusting the browser.
+- Get a two-part app ready to deploy on Vercel and Railway.
 
-### Environment variables (`server/.env`)
+### Key Concepts
+- **Responsive layout**: desktop-first media queries in Week 1, then mobile-first Tailwind classes (`sm:`, `md:`, `lg:`).
+- **React state and context**: the region filter and controlled `TravelerStepper`, and the trip plan shared through context and saved in `localStorage` (`client/src/lib/trip-plan.jsx`).
+- **REST API with Express**: JSON routes, a 404 and error handler, and error codes the frontend translates (`server/src/index.js`, `server/src/routes/`).
+- **Relational schema with an ORM**: users, orders and order items, translations in their own table, and archiving tours instead of deleting them (`server/src/db/schema.js`).
+- **Session authentication**: better-auth with hashed passwords and a database session in an httpOnly cookie, and `requireAuth` for protected routes.
+- **Payments with webhooks**: the price comes from the database, never from the browser, and a signature-checked webhook marks orders paid. It only changes `pending` orders, so a repeated event does nothing (`server/src/routes/checkout.js`, `webhook.js`).
+- **Internationalisation**: a small `t()` context with `Intl.PluralRules` and `Intl.NumberFormat`, and an English fallback in the API (`client/src/lib/i18n.jsx`, `server/src/lib/locale.js`).
 
-| Variable | Local | Production (Railway) |
-|---|---|---|
-| `DATABASE_URL` | Neon or Docker connection string | Neon connection string |
-| `BETTER_AUTH_SECRET` | long random string | a different long random string |
-| `BETTER_AUTH_URL` | `http://localhost:3001` | the Vercel URL |
-| `CLIENT_URL` | `http://localhost:5173` | the Vercel URL |
-| `PORT` | `3001` | set by Railway |
-| `STRIPE_SECRET_KEY` | `sk_test_...` (Stripe Dashboard → Developers → API keys, **Test mode**) | same test key |
-| `STRIPE_WEBHOOK_SECRET` | the `whsec_...` printed by `stripe listen` | the signing secret of the Dashboard webhook endpoint |
+### What I Learned
+- Moving from a static page to components and data files makes changes cheaper: the tours went from copied HTML to one array, and later to a database table, without rewriting the cards.
+- Payment state must be decided on the server. The success page proves nothing on its own; only the verified webhook does.
+- Copying the price into each order item keeps old orders correct when prices change.
+- Keeping `/api` on the same origin (Vite proxy in development, a Vercel rewrite in production) avoids cookie and CORS problems with sign-in.
+- Checking outside input carefully (ids, names with spaces, unknown Stripe events) turns crashes and 500 errors into clear 400 and 404 responses.
 
-### Frontend settings (`client/.env.local`, or Vercel → Project → Environment Variables)
+## Limitations
 
-All optional. Vite only exposes variables starting with `VITE_`, and they are baked in at **build** time.
+**Missing features**
+- Not deployed yet. `client/vercel.json` still has the `YOUR-RAILWAY-APP` placeholder.
+- No email verification or password reset. The `verification` table exists but is not used.
+- Tours, prices and reviews are samples, and payments are test mode only.
 
-| Variable | Default | What it does |
-|---|---|---|
-| `VITE_DEMO_MODE` | on | `false` removes the demo banner, hides the sample reviews and allows search engines to index the site. Only for a real business with real content. |
-| `VITE_WHATSAPP_NUMBER` | none | International format, e.g. `905551234567`. Shows "Ask on WhatsApp" buttons with the tour name already typed. Hidden when not set. |
-| `VITE_CONTACT_EMAIL` | `hello@wanderly.example` | Address for the "Email us" button. |
+**Technical limitations**
+- No automated test suite in the repository. The checks described in the development story were run locally by hand and with headless Chrome scripts that are not committed.
 
-### Testing the webhook locally (Stripe CLI)
-```bash
-stripe login                                                  # once
-stripe listen --forward-to localhost:3001/api/stripe/webhook  # start.sh runs this for you
-# copy the printed whsec_... into STRIPE_WEBHOOK_SECRET, then restart the API
-```
-Then add one or more tours to your trip plan, open **My trip**, click **Proceed to payment** and pay with `4242 4242 4242 4242`. The terminal shows `Order N paid`, and the success page switches to "paid".
+## Additional Documentation
 
-To see the orders in the database:
-```bash
-cd server && npm run db:studio      # or, with the Docker database:
-docker exec wanderly-pg psql -U wanderly -c "select id, user_id, status, total, paid_at from orders order by id"
-```
+- [Architecture](docs/architecture.md): database schema, how sign-in works, how payments work, the API.
+- [Running and deployment](docs/running-and-deployment.md): scripts, environment variables, testing the webhook locally, deploying to Neon, Railway, Vercel and Stripe.
+- [Development story](docs/development-story.md): what each practicum assignment added, and the bilingual demo.
 
-`.env` and `.env.*` are listed in `.gitignore`. Only `.env.example` is committed. To check:
-```bash
-git check-ignore -v server/.env   # prints the .gitignore rule that excludes it
-```
+## Credits
 
----
+- Built for the BrewHaus Practicum (October to November 2026).
+- Photos from Wikimedia Commons under CC0, CC BY and CC BY-SA. Each photographer and licence is listed on the site's `/credits` page.
 
-## API
+## License
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/health` | health check `{ ok: true, time }` |
-| GET | `/api/tours?lang=tr` | all active tours in that language (`en` is the default and the fallback) |
-| GET | `/api/tours/:slug?lang=tr` | one active tour, or `404` |
-| * | `/api/auth/*` | better-auth: `sign-up/email`, `sign-in/email`, `get-session`, `sign-out` |
-| POST | `/api/checkout` | 🔒 body `{ lang, items: [{ tourId, travelers }, ...] }` → `{ url }` of one Stripe Checkout page (in that language, in TRY) for all of them |
-| GET | `/api/orders/:id?lang=tr` | 🔒 one of *your* orders with its items and line totals (someone else's → `404`) |
-| POST | `/api/stripe/webhook` | called by Stripe only. The signature is verified. Marks orders `paid` / `expired`. Events without our `orderId` are acknowledged and ignored |
-| * | any other `/api/*` | `404` |
-
-🔒 = needs a signed-in user (`requireAuth`), otherwise `401`.
-
-**Errors** are `{ error, code }`: `error` is an English sentence for logs and API users, and `code` (e.g. `TOO_MANY_TRAVELERS`, `SIGN_IN_REQUIRED`) is what the frontend translates. better-auth errors carry codes too (e.g. `INVALID_EMAIL_OR_PASSWORD`).
-
----
-
-## Deployment
-
-1. **Neon:** create a project and copy the *pooled* connection string. Run `npm run db:push` and `npm run db:seed` against it once.
-2. **Railway (API):**
-   - Create a new project from the GitHub repo and set the **root directory** to `server`.
-   - Add the environment variables above. `BETTER_AUTH_URL` and `CLIENT_URL` are the Vercel URL. Also set `NODE_ENV=production`.
-   - Generate a public domain. Railway uses `server/railway.json` (`npm start`, health check `/api/health`).
-3. **Vercel (frontend):**
-   - Import the repo with the **root directory** set to `client`.
-   - In `client/vercel.json`, replace `YOUR-RAILWAY-APP.up.railway.app` with your Railway domain.
-   - `/api/*` is forwarded to Railway. All other paths get `index.html`, so `/login`, `/booking` and `/checkout/success` survive a refresh.
-4. **Stripe (production webhook):**
-   - In the Stripe Dashboard (Test mode), go to **Developers → Webhooks → Add endpoint**.
-   - URL: `https://<your-vercel-app>.vercel.app/api/stripe/webhook`. Events: `checkout.session.completed` and `checkout.session.expired`.
-   - Copy its signing secret into Railway as `STRIPE_WEBHOOK_SECRET`, and add `STRIPE_SECRET_KEY` there too.
-5. **Database update for the bilingual demo:** against Neon, run `npm run db:upgrade`, `npm run db:push`, `npm run db:seed`, in that order.
-6. **Optional:** set `VITE_WHATSAPP_NUMBER` in Vercel, then redeploy (Vite bakes it in at build time).
-
----
-
-## Development story
-
-### Assignment 1: Static HTML & CSS site (Week 1)
-
-**Goal:** build a responsive one-page site for a business of our choice. Ours is a travel agency.
-
-- `index.html` was one page with semantic sections: header/nav, hero, tour packages, about, reviews, call to action, footer.
-- `style.css`:
-  - The brand colours were CSS variables.
-  - Flexbox laid out the navbar, the about section and the footer.
-  - CSS Grid laid out the tour and review cards.
-- The responsive design was **desktop-first**. `max-width` media queries took over at 800px and 600px.
-- Accessibility basics: `aria-label`s, `aria-labelledby` on sections, alt text on every image.
-
-**Limitations:** the tour cards were copy-pasted HTML, nothing was interactive, and there was one large stylesheet.
-
----
-
-### Assignment 2: Rebuild with React & Tailwind (Week 2)
-
-**Goal:** the same site, rebuilt as a React + Tailwind app, plus the first real interactivity.
-
-1. Scaffolded **Vite + React** inside the existing repo.
-2. **Tailwind v4.** The old colours moved into an `@theme` block, so for example `--color-brand` became the `text-brand` class.
-3. **Data in one file.** The tours moved into `src/data/tours.js`, an array of objects rendered with `.map()`. Each tour also got a new `region` field.
-4. **Componentized:** `Header`, `Hero`, `Tours`, `About`, `Reviews`, `PlanTrip`, `Footer`, plus the shared `SectionHeading`, `Logo` and `TourCard`.
-5. **Region filter with `useState`:**
-   - `const [region, setRegion] = useState('All')` holds the selected region.
-   - The visible list is calculated on every render, not stored in state.
-6. **Controlled `TravelerStepper`.** It holds no state of its own:
-   - `TourCard` owns `travelers` and passes `value` and `onChange`.
-   - The stepper calls `onChange(value ± 1)`, kept between 1 and 10.
-   - The card's total price (`price × travelers`) updates with it.
-7. **Mobile-first responsive classes:** no prefix for phones, then `sm:`, `md:` and `lg:`.
-8. The old `style.css` was removed. No horizontal scroll from 320px up to 1440px wide.
-
----
-
-### Assignment 3: Backend, database, auth, and going live (Week 3)
-
-**Goal:** put a real backend behind the site: Postgres, a JSON API, real login, and both parts live on the internet.
-
-1. **Split into `client/` and `server/`.** The Week 2 app moved into `client/` unchanged. `.gitignore` now excludes `.env` and `.env.*` (but not `.env.example`).
-2. **Express 5 server** (`server/src/index.js`) with:
-   - CORS limited to our own frontend,
-   - `GET /api/health`,
-   - a JSON 404 for unknown `/api` paths,
-   - a JSON 500 error handler.
-   
-   It runs on port **3001**, because 3000 was already taken on the development machine.
-3. **Postgres schema with Drizzle** (`server/src/db/schema.js`): the four better-auth tables and our `tours` table. `npm run db:push` creates them.
-4. **Secrets in `.env`.** `DATABASE_URL` and `BETTER_AUTH_SECRET` are read with `dotenv`. `.env.example` documents them, and `.env` is never committed.
-5. **Seed script** (`npm run db:seed`). It copies the six Week 2 tours into the `tours` table. `onConflictDoNothing` on the unique `slug` makes it safe to run again.
-6. **Real API:** `GET /api/tours` and `GET /api/tours/:slug` read from Postgres and return JSON.
-7. **Real authentication with better-auth:**
-   - email + password sign-up and sign-in,
-   - hashed passwords,
-   - database sessions in an httpOnly cookie that lasts 7 days, so they survive a refresh.
-8. **Frontend wired up:**
-   - **React Router** pages `/login` and `/signup` share the `AuthForm` component.
-   - The `Header` uses `useSession()` to show "Sign in" or "Hi, name · Sign out".
-   - `Tours` loads its data with `useEffect` + `fetch('/api/tours')`, with loading and error states. The hardcoded `client/src/data/tours.js` was deleted.
-   - The Vite dev proxy forwards `/api` to the server.
-9. **Deployment config:**
-   - `server/railway.json` sets the start command and a health check.
-   - `client/vercel.json` sends `/api` to Railway and every other path to `index.html`.
-
-**Tested locally** in headless Chrome, against the full dev setup:
-- the tours load from the database,
-- sign-up lands back on the home page signed in,
-- the session survives a refresh,
-- sign-out works,
-- a wrong password shows "Invalid email or password",
-- signing in again works,
-- `/signup` loads directly.
-
----
-
-### Assignment 4: Real payments with Stripe Checkout (Week 4)
-
-**Goal:** a real (fake-money) purchase from start to finish:
-- click **Book now**,
-- pay on Stripe's hosted page,
-- a webhook confirms the payment,
-- the order is saved as paid,
-- a success page shows it.
-
-1. **Two new tables:**
-   - `orders`: one per purchase, with `status`, `total`, `stripe_session_id` and `paid_at`.
-   - `order_items`: which tour, how many travelers, and the `unit_price` at the moment of purchase.
-   
-   They were pushed with `drizzle-kit push`.
-2. **Stripe in test mode.** The `stripe` package, plus `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in `.env` (documented in `.env.example`).
-3. **Login middleware** `requireAuth`. It returns `401` unless there is a valid session and sets `req.user`. It protects checkout and order lookup.
-4. **`POST /api/checkout`.** It:
-   - validates the input,
-   - reads the **real price from the database** (a `price` sent by the browser is ignored),
-   - creates the `pending` order + item in one transaction,
-   - creates the Stripe Checkout Session (amount in cents, `metadata.orderId`, success and cancel URLs),
-   - returns its URL.
-   
-   If Stripe fails, the order is removed.
-5. **`POST /api/stripe/webhook`.** It:
-   - takes the raw body,
-   - verifies Stripe's signature,
-   - marks the order `paid` on `checkout.session.completed`, or `expired` on `checkout.session.expired`.
-   
-   It only updates `pending` orders, so a repeated event changes nothing. **No other code sets `paid`.**
-6. **"Book now" button** on every `TourCard`:
-   - If you're signed out, it sends you to `/login`.
-   - Otherwise it posts `{ tourId, travelers }` (the travelers come from the Week 2 stepper) and redirects to Stripe.
-   - Errors are shown on the card.
-7. **`GET /api/orders/:id` + `/checkout/success` page.**
-   - The endpoint returns only your own orders. Anyone else gets `404`.
-   - The page asks the endpoint again every 1.5 s (up to 6 times) while the order is `pending`, then shows the paid order with its items and total.
-   - It stops asking if you leave the page.
-8. **`start.sh`** runs the API, the frontend and `stripe listen` with one command (`--setup` also pushes the schema and seeds), and Ctrl+C stops them all.
-9. **Review before paying, and several tours at once:**
-   - "Book now" became **Add to trip plan**. Customers can choose several tours, each with its own number of travelers.
-   - A new **`/booking`** page lists every chosen tour (photo, days, price per traveler, stepper, line total, Remove), a price summary and the grand total.
-   - Only its **Proceed to payment** button starts checkout, and it pays for **all** tours together: one order, several `order_items`, one Stripe page.
-   - Cancelling on Stripe returns to `/booking` with the plan intact.
-   - Signing in from there returns to `/booking` (`/login?next=/booking`). Only paths on our own site are accepted for `next`.
-10. **Header reorganised** into three groups:
-    - page links (Tours, About, Reviews),
-    - the account (Sign in, or your initial + first name and a smaller Sign out),
-    - one main button, **My trip (N)**, that shows how many tours are in the plan.
-    
-    On phones, the logo and My trip sit on the top row, with the links and the account below.
-11. **Scroll fixes:** a new page starts at the top, and links like `/#tours` land on their section, even when coming from another page.
-
-**Tested locally:**
-- Checkout without login gets `401`.
-- 50 travelers gets `400`.
-- An unknown tour gets `404`.
-- A Stripe failure leaves no stray order behind.
-- A forged webhook gets `400`.
-- A Stripe-signed webhook (made with Stripe's own `generateTestHeaderString` helper) flips the order to `paid`.
-- Someone else's order gets `404`.
-- An empty plan, a duplicate tour, 0 travelers or a missing tour in a multi-tour checkout each get a clear `400`/`404`.
-- In Chrome:
-  - Adding Santorini (1) and Kyoto (3) shows **My trip 2**.
-  - `/booking` shows $650 + $2340 = **$2990**.
-  - Changing travelers and removing a tour update the totals and the header count.
-  - Signed out, "Sign in to book" returns to `/booking` after sign-in with the plan intact.
-  - A paid two-tour order shows both tours and **$3640** on the success page, and the plan empties.
-  - No horizontal scroll at 320px.
-- The full Stripe payment (real test key + Stripe CLI + card 4242) is done with the real Stripe account.
-
----
-
-### After the practicum: a bilingual Black Sea demo for a client pitch
-
-**Goal:** turn Wanderly into a convincing demo of a tour agency in the Black Sea highlands (Rize, Kaçkar, Trabzon), in **English and Turkish**, to show a real agency what a modern site for them could look like before negotiating the real project.
-
-1. **Fixed the three bugs from the code review first:**
-   - a name starting with a space (`" Ali"`) crashed the header and left a blank page. The name is now trimmed, the header never indexes an empty string, and **error boundaries** show a message instead of a blank page if anything else crashes;
-   - non-numeric ids (`/api/orders/abc`, `tourId: "x"`) reached Postgres as `NaN` and became `500`s. `parseId()` now turns them into `400`/`404`;
-   - a signed Stripe event without our `orderId` caused a `500`, so Stripe would keep retrying. It is now acknowledged with `200` and ignored.
-2. **New product range** like a real highlands agency: 4 day tours, 3 hikes (including a 4-day Kaçkar trek), a private VIP day and 2 airport transfers. Demo prices in Turkish lira.
-3. **Bilingual data model:** `tour_translations` (one row per tour per language), plus `category`, `price_unit` (`person` / `vehicle`), `max_guests` and `active` on `tours`. The seed script now **upserts** and **archives** instead of skipping, and `db:upgrade` moves an old database over without `drizzle-kit push` asking rename questions.
-4. **Bilingual API:** `?lang=` on tours and orders with English fallback. Checkout opens Stripe in the visitor's language, charges in TRY, and sells vans per vehicle (quantity 1) and group tours per traveler. Every error has a `code` the browser translates.
-5. **Bilingual frontend:** a small i18n module (context + `t()` + plural forms via `Intl.PluralRules` + prices via `Intl.NumberFormat`), an EN/TR switch, and language chosen from `?lang=`, the saved choice, or the browser's language. `<html lang>` and the tab title follow along.
-6. **A page for every tour** (`/tours/:slug`) with description, highlights, what's included, group size, a booking box and an "Ask on WhatsApp" button. Category filter kept in the URL (`/?category=transfer`), a 404 page, and a photo credits page.
-7. **Photos** of the real region from Wikimedia Commons (CC0 / CC BY / CC BY-SA), optimised and served from `client/public/images`, each credited.
-
-#### Demo mode
-
-`VITE_DEMO_MODE` is on unless set to `false`. In demo mode:
-- a banner on every page says the tours, prices and reviews are samples and payments are test-only;
-- the reviews section is labelled "sample" (with demo mode off, it is hidden until real reviews exist: invented reviews must never look real);
-- `<meta name="robots" content="noindex, nofollow">` is added to `index.html` at build time, so search engines don't list a sample agency.
-
-**Tested locally** against Postgres with a stubbed Stripe call (34 automated browser checks, headless Chrome):
-- English and Turkish home pages, the language switch, `?lang=tr` links, and Turkish browsers getting Turkish automatically;
-- prices `₺1,850` (EN) / `₺1.850` (TR);
-- category filter;
-- tour page in Turkish, with the stepper capped at the group size;
-- a van for 5 costs the same as a van for 1;
-- booking total ₺7.200 + ₺5.200 = **₺12.400**;
-- an old plan with an archived tour is cleaned up;
-- sign-up as `" Sara Yılmaz"` shows "Sara" with no crash;
-- checkout sends `locale: 'tr'` and `currency: 'try'`;
-- a signed webhook marks the order paid, the success page shows the van line, and the plan empties;
-- the credits page lists all 12 photos, and the 404 page works;
-- no horizontal scroll at 320px; no JavaScript errors.
-
-Also checked: all checkout validation codes, archived tours can't be booked, someone else's order gets `404`, and `db:upgrade` → `db:push` → `db:seed` on a Week 4 database (twice) needs no answers and loses no orders.
+No licence: all rights reserved. © 2026 Nasser Hussein.
